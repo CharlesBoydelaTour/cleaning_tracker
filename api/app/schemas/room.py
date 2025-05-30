@@ -6,6 +6,8 @@ class RoomBase(BaseModel):
     name: str
     icon: Optional[str] = None
 
+    model_config = {"strict": True}
+
 
 class RoomCreate(RoomBase):
     pass

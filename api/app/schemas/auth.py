@@ -8,10 +8,14 @@ class UserSignup(BaseModel):
     password: str
     full_name: Optional[str] = None
 
+    model_config = ConfigDict(strict=True)
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+    model_config = ConfigDict(strict=True)
 
 
 class Token(BaseModel):
@@ -27,6 +31,8 @@ class TokenData(BaseModel):
 
 class RefreshToken(BaseModel):
     refresh_token: str
+
+    model_config = ConfigDict(strict=True)
 
 
 class UserResponse(BaseModel):

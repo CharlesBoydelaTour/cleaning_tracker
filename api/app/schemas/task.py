@@ -7,6 +7,8 @@ class TaskBase(BaseModel):
     title: str
     description: str | None = None
 
+    model_config = {"strict": True}
+
 
 class TaskCreate(TaskBase):
     household_id: UUID

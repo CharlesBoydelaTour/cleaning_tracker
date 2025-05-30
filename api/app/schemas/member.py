@@ -10,6 +10,8 @@ class HouseholdMemberBase(BaseModel):
     role: Literal["admin", "member", "guest"] = "member"
     joined_at: Optional[datetime] = None
 
+    model_config = {"strict": True}
+
 
 class HouseholdMemberCreate(HouseholdMemberBase):
     household_id: Optional[UUID] = None  # Rendre optionnel
@@ -19,8 +21,10 @@ class HouseholdMemberCreate(HouseholdMemberBase):
 class HouseholdMember(HouseholdMemberBase):
     user_id: UUID
     role: Literal["admin", "member", "guest"] = "member"
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True}  # Pas de strict ici
 
 
 class HouseholdMemberUpdate(BaseModel):
     role: Optional[Literal["admin", "member", "guest"]] = None
+
+    model_config = {"strict": True}
