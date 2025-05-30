@@ -138,7 +138,7 @@ async def add_household_member(
         HTTPException
     ):  # Re-lever les HTTPException spécifiques (comme celles de la vérification d'accès)
         raise
-    except Exception as e:
+    except Exception:
         # Pour les erreurs inattendues, loguer l'erreur côté serveur
         import traceback  # Ajoutez cette ligne
 

@@ -120,7 +120,7 @@ class TaskNotInHousehold(BusinessException):
     def __init__(self, task_id: str, household_id: str, **kwargs):
         super().__init__(
             error_code="TASK_NOT_IN_HOUSEHOLD",
-            user_message=f"La tâche demandée n'existe pas dans ce ménage",
+            user_message="La tâche demandée n'existe pas dans ce ménage",
             technical_message=f"Task {task_id} does not belong to household {household_id}",
             http_status=HTTPStatus.NOT_FOUND,
             metadata={"task_id": task_id, "household_id": household_id},
@@ -140,21 +140,6 @@ class RoomNotFound(BusinessException):
             metadata={"room_id": room_id},
             **kwargs,
         )
-
-
-class OccurrenceNotFound(BusinessException):
-    """Exception levée quand une occurrence n'est pas trouvée"""
-
-    def __init__(self, occurrence_id: str, **kwargs):
-        super().__init__(
-            error_code="OCCURRENCE_NOT_FOUND",
-            user_message=f"L'occurrence avec l'ID {occurrence_id} n'existe pas",
-            technical_message=f"Occurrence not found: {occurrence_id}",
-            http_status=HTTPStatus.NOT_FOUND,
-            metadata={"occurrence_id": occurrence_id},
-            **kwargs,
-        )
-
 
 class UnauthorizedAccess(BusinessException):
     """Exception levée pour les accès non autorisés"""

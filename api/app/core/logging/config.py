@@ -2,10 +2,9 @@ import logging
 import logging.handlers
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from datetime import datetime
 import json
-from pydantic_settings import BaseSettings
 
 from app.config import settings
 

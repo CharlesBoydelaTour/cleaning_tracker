@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from fastapi import HTTPException, status
 from app.core.supabase_client import supabase
 from app.core.security import create_access_token, create_refresh_token

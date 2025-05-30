@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, HTTPException, status
+from fastapi import APIRouter, Depends, Request, status
 from app.schemas.household import HouseholdCreate, Household
 from app.core.database import get_households, create_household
 from app.core.exceptions import DatabaseError, UnauthorizedAccess, HouseholdNotFound

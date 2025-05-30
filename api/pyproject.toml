@@ -35,3 +35,12 @@ dev = [
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]  # Regarder dans le répertoire courant
+include = ["app*"]  # Inclure seulement le répertoire 'app' et ses sous-modules
+exclude = ["logs*"] # Exclure explicitement 'logs'
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

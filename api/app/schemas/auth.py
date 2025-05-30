@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict  # Ajout de ConfigDict
 from typing import Optional
 from datetime import datetime
 
@@ -37,10 +37,10 @@ class UserResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-    class Config:
-        json_encoders = {datetime: lambda dt: dt.isoformat() if dt else None}
-        # Permettre la validation de valeurs arbitraires pour gérer les chaînes de date
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(
+        json_encoders={datetime: lambda dt: dt.isoformat() if dt else None},
+        arbitrary_types_allowed=True,
+    )
 
 
 class AuthResponse(BaseModel):

@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends
 from app.schemas.task import Occurrence
 from app.core.exceptions import (
     DatabaseError,
     UnauthorizedAccess,
     OccurrenceNotFound,
-    TaskNotFound,
 )
 from app.routers.households import get_db_pool, check_household_access
 import asyncpg
