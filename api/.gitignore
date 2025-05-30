@@ -6,4 +6,11 @@
 .env.local
 .env.*.local
 .env
-
+app.log
+.pyc
+__pycache__
+.venv
+.vscode
+.ruff_cache
+.pytest_cache
+api.egg-info

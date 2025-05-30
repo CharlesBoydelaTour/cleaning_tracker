@@ -4,6 +4,9 @@ from app.core.supabase_client import supabase
 from app.core.security import create_access_token, create_refresh_token
 from app.schemas.auth import UserSignup, UserLogin, AuthResponse, UserResponse, Token
 from app.core.supabase_client import supabase_admin
+from app.core.logging import get_logger, with_context
+
+logger = get_logger(__name__)
 
 
 class AuthService:
@@ -23,6 +26,12 @@ class AuthService:
         Raises:
             HTTPException: Si l'inscription échoue
         """
+
+        logger.info(
+            "Tentative d'inscription d'un nouvel utilisateur",
+            extra=with_context(email=user_data.email),
+        )
+
         try:
             # Créer l'utilisateur avec Supabase Auth
             response = supabase.auth.sign_up(
@@ -34,12 +43,21 @@ class AuthService:
             )
 
             if response.user is None:
+                logger.error(
+                    "Échec de l'inscription de l'utilisateur",
+                    extra=with_context(email=user_data.email),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Erreur lors de la création du compte. Email peut-être déjà utilisé.",
                 )
 
             user = response.user
+
+            logger.info(
+                "Utilisateur créé avec succès dans Supabase Auth",
+                extra=with_context(user_id=user.id, email=user.email),
+            )
 
             # Créer nos propres tokens JWT
             access_token = create_access_token(
@@ -62,6 +80,11 @@ class AuthService:
             )
 
         except Exception as e:
+            logger.error(
+                "Erreur inattendue lors de l'inscription",
+                extra=with_context(email=user_data.email, error_type=type(e).__name__),
+                exc_info=True,
+            )
             if isinstance(e, HTTPException):
                 raise e
             raise HTTPException(
@@ -83,6 +106,11 @@ class AuthService:
         Raises:
             HTTPException: Si la connexion échoue
         """
+
+        logger.info(
+            "Tentative de connexion", extra=with_context(email=user_credentials.email)
+        )
+
         try:
             # Authentifier avec Supabase
             response = supabase.auth.sign_in_with_password(
@@ -96,7 +124,10 @@ class AuthService:
                 )
 
             user = response.user
-
+            logger.info(
+                "Connexion réussie",
+                extra=with_context(user_id=user.id, email=user.email),
+            )
             # Créer nos propres tokens JWT
             access_token = create_access_token(
                 data={"sub": user.id, "email": user.email}
@@ -117,9 +148,16 @@ class AuthService:
                 tokens=Token(access_token=access_token, refresh_token=refresh_token),
             )
 
+        except HTTPException:
+            raise
         except Exception as e:
-            if isinstance(e, HTTPException):
-                raise e
+            logger.error(
+                "Erreur inattendue lors de la connexion",
+                extra=with_context(
+                    email=user_credentials.email, error_type=type(e).__name__
+                ),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email ou mot de passe incorrect",
@@ -146,8 +184,15 @@ class AuthService:
             payload = verify_token(refresh_token)
             user_id = payload.get("sub")
             email = payload.get("email")
-
+            logger.info(
+                "Renouvellement des tokens",
+                extra=with_context(user_id=user_id, email=email),
+            )
             if user_id is None or email is None:
+                logger.error(
+                    "Token de rafraîchissement invalide",
+                    extra=with_context(refresh_token=refresh_token),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Token de rafraîchissement invalide",
@@ -155,10 +200,20 @@ class AuthService:
 
             # Créer un nouveau token d'accès
             access_token = create_access_token(data={"sub": user_id, "email": email})
-
+            logger.info(
+                "Nouveau token d'accès créé",
+                extra=with_context(user_id=user_id, email=email),
+            )
             return Token(access_token=access_token, refresh_token=refresh_token)
 
         except Exception as e:
+            logger.error(
+                "Erreur lors du renouvellement des tokens",
+                extra=with_context(
+                    refresh_token=refresh_token, error_type=type(e).__name__
+                ),
+                exc_info=True,
+            )
             if isinstance(e, HTTPException):
                 raise e
             raise HTTPException(
@@ -176,9 +231,15 @@ class AuthService:
         """
         try:
             # Déconnecter de Supabase
+            logger.info("Tentative de déconnexion de l'utilisateur")
             supabase.auth.sign_out()
             return {"message": "Déconnexion réussie"}
         except Exception as e:
+            logger.error(
+                "Erreur lors de la déconnexion de l'utilisateur",
+                extra=with_context(error_type=type(e).__name__),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Erreur lors de la déconnexion: {str(e)}",
@@ -198,6 +259,12 @@ class AuthService:
         try:
             from app.core.supabase_client import supabase_admin
 
+            logger.info(
+                "Récupération du profil utilisateur",
+                extra=with_context(
+                    user_id=user["id"] if isinstance(user, dict) else user.id
+                ),
+            )
             # Récupérer les données complètes de l'utilisateur depuis Supabase
             user_id = user["id"] if isinstance(user, dict) else user.id
 
@@ -205,6 +272,10 @@ class AuthService:
             user_response = supabase_admin.auth.admin.get_user_by_id(user_id)
 
             if not user_response.user:
+                logger.error(
+                    "Utilisateur non trouvé",
+                    extra=with_context(user_id=user_id),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Utilisateur non trouvé",
@@ -245,7 +316,10 @@ class AuthService:
                     )
                 else:
                     updated_at = supabase_user.updated_at
-
+            logger.info(
+                "Profil utilisateur récupéré avec succès",
+                extra=with_context(user_id=supabase_user.id, email=supabase_user.email),
+            )
             return UserResponse(
                 id=supabase_user.id,
                 email=supabase_user.email,
@@ -260,6 +334,14 @@ class AuthService:
             )
 
         except Exception as e:
+            logger.error(
+                "Erreur lors de la récupération du profil utilisateur",
+                extra=with_context(
+                    user_id=user["id"] if isinstance(user, dict) else user.id,
+                    error_type=type(e).__name__,
+                ),
+                exc_info=True,
+            )
             if isinstance(e, HTTPException):
                 raise e
             raise HTTPException(
@@ -279,13 +361,28 @@ class AuthService:
             bool: True si confirmé
         """
         try:
+            logger.info(
+                "Vérification de la confirmation de l'email",
+                extra=with_context(email=email),
+            )
             # Ici on pourrait ajouter une logique pour vérifier
             # le statut de confirmation email via Supabase
             response = supabase.auth.get_user()
             if response.user and response.user.email == email:
+                logger.info(
+                    "Email confirmé",
+                    extra=with_context(
+                        email=email, confirmed=response.user.email_confirmed_at
+                    ),
+                )
                 return response.user.email_confirmed_at is not None
             return False
         except Exception:
+            logger.error(
+                "Erreur lors de la vérification de la confirmation de l'email",
+                extra=with_context(email=email),
+                exc_info=True,
+            )
             return False
 
     @staticmethod
@@ -300,9 +397,18 @@ class AuthService:
             Dict: Message de confirmation
         """
         try:
+            logger.info(
+                "Demande de réinitialisation de mot de passe",
+                extra=with_context(email=email),
+            )
             supabase.auth.reset_password_email(email)
             return {"message": "Email de réinitialisation envoyé"}
         except Exception as e:
+            logger.error(
+                "Erreur lors de l'envoi de l'email de réinitialisation",
+                extra=with_context(email=email, error_type=type(e).__name__),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Erreur lors de l'envoi de l'email: {str(e)}",
@@ -324,10 +430,18 @@ class AuthService:
             HTTPException: Si la suppression échoue
         """
         try:
+            logger.info(
+                "Tentative de suppression de l'utilisateur",
+                extra=with_context(user_id=user_id),
+            )
             # Supprimer l'utilisateur avec Supabase Admin
             response = supabase_admin.auth.admin.delete_user(user_id)
 
             if response.error:
+                logger.error(
+                    "Échec de la suppression de l'utilisateur",
+                    extra=with_context(user_id=user_id, error=response.error.message),
+                )
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Erreur lors de la suppression de l'utilisateur: {response.error.message}",
@@ -335,6 +449,11 @@ class AuthService:
 
             return {"message": "Utilisateur supprimé avec succès"}
         except Exception as e:
+            logger.error(
+                "Erreur inattendue lors de la suppression de l'utilisateur",
+                extra=with_context(user_id=user_id, error_type=type(e).__name__),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Erreur lors de la suppression de l'utilisateur: {str(e)}",

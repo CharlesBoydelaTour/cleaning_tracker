@@ -66,5 +66,5 @@ async def delete_current_user(current_user=Depends(get_current_user)):
     """
     # current_user peut être un dict ou un objet selon votre implémentation
     user_id = getattr(current_user, "id", None) or current_user.get("id")
-    AuthService.delete_user(user_id)
+    await AuthService.delete_user(user_id)
     return {"message": "Utilisateur supprimé"}

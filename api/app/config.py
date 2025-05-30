@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -29,6 +30,16 @@ class Settings(BaseSettings):
         extra="ignore",
         case_sensitive=False,
     )
+
+    # Logging settings
+    environment: str = "development"  # development, staging, production
+    log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+    log_format: str = "text"  # text, json
+    log_file_path: Optional[str] = (
+        "logs/app.log"  # None pour désactiver les logs fichier
+    )
+    log_max_bytes: int = 10485760
+    log_backup_count: int = 5  # Nombre de fichiers de backup à conserver
 
 
 settings = Settings()
