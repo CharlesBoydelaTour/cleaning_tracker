@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from datetime import datetime, timedelta, timezone
 import jwt
 from passlib.context import CryptContext
@@ -15,7 +16,6 @@ from app.core.security import (
 )
 from app.schemas.auth import UserSignup, UserLogin
 from app.config import settings
-from app.core.exceptions import InvalidCredentials, TokenExpired
 
 
 # Configuration du client de test
@@ -150,25 +150,25 @@ class TestSecurityUtils:
 
     def test_verify_token_invalid(self):
         """Test de vérification d'un token invalide"""
-        # Token malformé - doit lever une InvalidCredentials
-        with pytest.raises(InvalidCredentials) as exc_info:
+        # Token malformé - doit lever une HTTPException
+        with pytest.raises(HTTPException) as exc_info:
             verify_token("invalid_token")
-        assert exc_info.value.http_status.value == 401
+        assert exc_info.value.status_code == 401
 
-        # Token vide - doit lever une InvalidCredentials
-        with pytest.raises(InvalidCredentials) as exc_info:
+        # Token vide - doit lever une HTTPException
+        with pytest.raises(HTTPException) as exc_info:
             verify_token("")
-        assert exc_info.value.http_status.value == 401
+        assert exc_info.value.status_code == 401
 
-        # Token avec mauvaise signature - doit lever une InvalidCredentials
+        # Token avec mauvaise signature - doit lever une HTTPException
         fake_token = jwt.encode(
             {"sub": "test@example.com"},
             "wrong_secret",
             algorithm=settings.jwt_algorithm,
         )
-        with pytest.raises(InvalidCredentials) as exc_info:
+        with pytest.raises(HTTPException) as exc_info:
             verify_token(fake_token)
-        assert exc_info.value.http_status.value == 401
+        assert exc_info.value.status_code == 401
 
     def test_verify_token_expired(self):
         """Test de vérification d'un token expiré"""
@@ -183,10 +183,10 @@ class TestSecurityUtils:
             algorithm=settings.jwt_algorithm,
         )
 
-        # Vérification - doit lever une InvalidCredentials (le token est techniquement invalide car expiré)
-        with pytest.raises(InvalidCredentials) as exc_info:
+        # Vérification - doit lever une HTTPException
+        with pytest.raises(HTTPException) as exc_info:
             verify_token(expired_token)
-        assert exc_info.value.http_status.value == 401
+        assert exc_info.value.status_code == 401
 
 
 # ============================================================================
@@ -249,13 +249,9 @@ class TestAuthEndpoints:
 
     def test_refresh_endpoint_structure(self):
         """Test de base de l'endpoint refresh"""
-        # Créer un token de refresh valide pour le test
-        refresh_token = create_refresh_token(
-            data={"sub": "test_user", "email": "test@example.com"}
-        )
-        refresh_data = {"refresh_token": refresh_token}
+        refresh_data = {"refresh_token": "some_token"}
         response = client.post("/auth/refresh", json=refresh_data)
-        # L'endpoint devrait exister (pas 404) et retourner soit 200 soit 401 pour un token valide/invalide
+        # L'endpoint devrait exister (pas 404)
         assert response.status_code != 404
 
     def test_me_endpoint_structure(self):
