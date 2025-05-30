@@ -1,6 +1,7 @@
 from pydantic import BaseModel, EmailStr, ConfigDict  # Ajout de ConfigDict
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 
 class UserSignup(BaseModel):
@@ -26,7 +27,7 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
-    user_id: Optional[str] = None
+    user_id: Optional[UUID] = None
 
 
 class RefreshToken(BaseModel):
@@ -36,7 +37,7 @@ class RefreshToken(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: UUID  # Changer str en UUID
     email: str
     full_name: Optional[str] = None
     email_confirmed_at: Optional[datetime] = None
