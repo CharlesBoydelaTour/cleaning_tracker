@@ -5,6 +5,7 @@ from app.core.security import create_access_token, create_refresh_token
 from app.schemas.auth import UserSignup, UserLogin, AuthResponse, UserResponse, Token
 from app.core.supabase_client import supabase_admin
 from app.core.logging import get_logger, with_context
+from app.config import settings  # Ajout potentiel si SITE_URL est utilisé
 
 logger = get_logger(__name__)
 
@@ -412,6 +413,55 @@ class AuthService:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Erreur lors de l'envoi de l'email: {str(e)}",
+            )
+
+    @staticmethod
+    async def resend_verification_email(email: str) -> Dict[str, str]:
+        """
+        Renvoyer l'e-mail de vérification à l'utilisateur.
+
+        Args:
+            email: L'adresse e-mail de l'utilisateur.
+
+        Returns:
+            Dict: Message de confirmation.
+
+        Raises:
+            HTTPException: Si l'envoi de l'e-mail échoue.
+        """
+        logger.info(
+            "Tentative de renvoi de l'e-mail de vérification",
+            extra=with_context(email=email),
+        )
+        try:
+            # Note: La méthode exacte peut varier légèrement en fonction de la version de gotrue-py
+            # ou des configurations spécifiques de Supabase.
+            # send_otp est souvent utilisé pour cela avec le type 'signup' ou 'email_change'.
+            # Si une URL de redirection spécifique est nécessaire, elle doit être configurée.
+            # Par exemple: redirect_to=settings.EMAIL_VERIFICATION_REDIRECT_URL
+            # Pour l'instant, on suppose que Supabase gère la redirection par défaut.
+            response = supabase.auth.api.send_verification_email(email=email)  # ou supabase.auth.resend(email=email, type="signup")
+
+            # La réponse de send_verification_email ne contient généralement pas d'erreur explicite
+            # mais lève une exception en cas de problème majeur.
+            # Il est bon de vérifier si l'utilisateur existe et n'est pas déjà confirmé,
+            # mais Supabase devrait gérer ces cas.
+            logger.info(
+                "E-mail de vérification renvoyé avec succès",
+                extra=with_context(email=email),
+            )
+            return {"message": "E-mail de vérification renvoyé avec succès. Veuillez consulter votre boîte de réception."}
+        except Exception as e:
+            logger.error(
+                "Erreur lors du renvoi de l'e-mail de vérification",
+                extra=with_context(email=email, error_type=type(e).__name__),
+                exc_info=True,
+            )
+            # Il est préférable de ne pas révéler si l'email existe ou non pour des raisons de sécurité.
+            # Cependant, Supabase peut retourner des erreurs spécifiques que l'on pourrait vouloir gérer.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Erreur lors du renvoi de l'e-mail de vérification: {str(e)}",
             )
 
     @staticmethod

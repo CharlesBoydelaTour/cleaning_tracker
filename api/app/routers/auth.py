@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status  # Ajout de status
 from app.schemas.auth import (
     UserSignup,
     UserLogin,
@@ -64,6 +64,20 @@ async def verify_email_status(email: str):
     """Vérifier le statut de confirmation d'email"""
     is_confirmed = await AuthService.verify_email_confirmation(email)
     return {"email": email, "confirmed": is_confirmed}
+
+
+@router.post("/resend-verification-email", status_code=status.HTTP_200_OK)
+async def resend_verification_email_endpoint(email: str):
+    """
+    Renvoyer l'e-mail de vérification à l'utilisateur.
+    """
+    if not email or not email.strip():
+        raise InvalidInput(
+            field="email",
+            reason="L'adresse email est requise",  # Corrigé: message -> reason
+            value=email,  # Corrigé: received_value -> value
+        )
+    return await AuthService.resend_verification_email(email)
 
 
 @router.delete("/me", summary="Supprime le compte de l'utilisateur connecté")

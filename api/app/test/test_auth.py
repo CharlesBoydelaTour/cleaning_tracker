@@ -273,6 +273,62 @@ class TestAuthEndpoints:
         # Avec un token valide, on ne devrait pas avoir 404
         assert response.status_code != 404
 
+    def test_resend_verification_email_endpoint_structure(self):
+        """Test de base de l'endpoint resend-verification-email"""
+        response = client.post("/auth/resend-verification-email?email=test@example.com")
+        # L'endpoint devrait exister (pas 404)
+        assert response.status_code != 404
+
+    def test_resend_verification_email_success(self, mocker):
+        """Test du renvoi réussi de l'e-mail de vérification"""
+        mock_auth_service = mocker.patch(
+            "app.services.auth_service.AuthService.resend_verification_email"
+        )
+        mock_auth_service.return_value = {
+            "message": "E-mail de vérification renvoyé avec succès. Veuillez consulter votre boîte de réception."
+        }
+
+        response = client.post("/auth/resend-verification-email?email=test@example.com")
+        assert response.status_code == 200
+        assert response.json() == {
+            "message": "E-mail de vérification renvoyé avec succès. Veuillez consulter votre boîte de réception."
+        }
+        mock_auth_service.assert_called_once_with("test@example.com")
+
+    def test_resend_verification_email_missing_email(self):
+        """Test du renvoi de l'e-mail de vérification avec e-mail manquant"""
+        response = client.post("/auth/resend-verification-email")
+        assert response.status_code == 422  # FastAPI devrait retourner 422 pour les paramètres de requête manquants
+
+    def test_resend_verification_email_empty_email(self):
+        """Test du renvoi de l'e-mail de vérification avec e-mail vide"""
+        response = client.post("/auth/resend-verification-email?email=")
+        assert response.status_code == 400
+        json_response = response.json()
+        # La structure de l'erreur personnalisée est { "error": { "message": ..., "code": ... } }
+        assert json_response["error"]["message"] == "Valeur invalide pour le champ 'email': L'adresse email est requise"
+        assert json_response["error"]["code"] == "INVALID_INPUT"
+
+    def test_resend_verification_email_service_error(self, mocker):
+        """Test du renvoi de l'e-mail de vérification avec une erreur de service"""
+        mock_auth_service = mocker.patch(
+            "app.services.auth_service.AuthService.resend_verification_email"
+        )
+        # Simuler une HTTPException levée par le service, qui sera gérée par le handler global
+        mock_auth_service.side_effect = HTTPException(
+            status_code=400,
+            detail="Quelque chose s'est mal passé lors du renvoi", # Le handler d'exception peut reformater ce détail
+        )
+
+        response = client.post("/auth/resend-verification-email?email=test@example.com")
+        assert response.status_code == 400
+        json_response = response.json()
+        # Vérifier la structure de réponse d'erreur attendue du handler d'exception pour HTTPException
+        assert "error" in json_response
+        assert json_response["error"]["code"] == "HTTP_400"
+        assert "Quelque chose s'est mal passé" in json_response["error"]["message"]
+        mock_auth_service.assert_called_once_with("test@example.com")
+
 
 # ============================================================================
 # 4. TESTS D'AUTORISATION
