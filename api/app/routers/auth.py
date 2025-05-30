@@ -9,6 +9,7 @@ from app.schemas.auth import (
 )
 from app.core.security import get_current_user
 from app.services.auth_service import AuthService
+from app.core.exceptions import InvalidInput
 from typing import Dict, Any
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -49,6 +50,12 @@ async def get_current_user_info(
 @router.post("/reset-password")
 async def request_password_reset(email: str):
     """Demander une réinitialisation de mot de passe"""
+    if not email or not email.strip():
+        raise InvalidInput(
+            field="email",
+            message="L'adresse email est requise",
+            received_value=email,
+        )
     return await AuthService.request_password_reset(email)
 
 

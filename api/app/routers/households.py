@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, HTTPException, status
 from app.schemas.household import HouseholdCreate, Household
 from app.core.database import get_households, create_household
+from app.core.exceptions import DatabaseError, UnauthorizedAccess, HouseholdNotFound
 import asyncpg
 from uuid import UUID
 
@@ -26,9 +27,9 @@ async def list_households(
         households = await get_households(db_pool, user_id)
         return households
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération des ménages: {str(e)}",
+        raise DatabaseError(
+            operation="récupération des ménages",
+            details=str(e),
         )
 
 
@@ -48,9 +49,9 @@ async def create_new_household(
         )
         return new_household
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la création du ménage: {str(e)}",
+        raise DatabaseError(
+            operation="création du ménage",
+            details=str(e),
         )
 
 
@@ -68,9 +69,10 @@ async def get_household(
         if user_id:
             has_access = await check_household_access(db_pool, household_id, user_id)
             if not has_access:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Vous n'avez pas accès à ce ménage",
+                raise UnauthorizedAccess(
+                    resource="ménage",
+                    resource_id=str(household_id),
+                    user_id=str(user_id),
                 )
 
         # Récupérer les détails du ménage
@@ -85,18 +87,15 @@ async def get_household(
             )
 
             if not household_data:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Ménage non trouvé (ID: {household_id})",
-                )
+                raise HouseholdNotFound(household_id=str(household_id))
 
             return dict(household_data)
-    except HTTPException:
+    except (UnauthorizedAccess, HouseholdNotFound):
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la récupération du ménage: {str(e)}",
+        raise DatabaseError(
+            operation="récupération du ménage",
+            details=str(e),
         )
 
 

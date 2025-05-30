@@ -1,7 +1,16 @@
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 from app.routers import auth, households, tasks, occurrences, members, rooms
 from app.core.database import init_db_pool  # Added import
+from app.core.exceptions import BaseApplicationException
+from app.core.exception_handler import (
+    application_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+    generic_exception_handler,
+)
 
 
 @asynccontextmanager
@@ -16,6 +25,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Cleaning Tracker API", lifespan=lifespan)  # Added lifespan
+
+# Ajout des gestionnaires d'exceptions
+app.add_exception_handler(BaseApplicationException, application_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 # Include routers
 app.include_router(auth.router, tags=["auth"])
