@@ -2,6 +2,7 @@ import asyncpg
 from app.config import settings
 from typing import Optional, Dict, Any, List
 from uuid import UUID
+from datetime import date
 
 
 async def init_db_pool():
@@ -41,16 +42,23 @@ async def create_household(
             name,
         )
 
-        # Si l'ID de l'utilisateur est fourni, l'ajouter comme membre du ménage
+        # Si l'ID de l'utilisateur est fourni, vérifier qu'il existe et l'ajouter comme membre du ménage
         if created_by_user_id:
-            await conn.execute(
-                """
-                INSERT INTO household_members (household_id, user_id, role) 
-                VALUES ($1, $2, 'admin')
-                """,
-                household_id,
-                created_by_user_id,
+            # Vérifier que l'utilisateur existe
+            user_exists = await conn.fetchval(
+                "SELECT 1 FROM users WHERE id = $1",
+                created_by_user_id
             )
+            
+            if user_exists:
+                await conn.execute(
+                    """
+                    INSERT INTO household_members (household_id, user_id, role) 
+                    VALUES ($1, $2, 'admin')
+                    """,
+                    household_id,
+                    created_by_user_id,
+                )
 
         # Récupérer les données complètes du ménage
         household_data = await conn.fetchrow(
@@ -216,6 +224,104 @@ async def create_household_member(
         return dict(member_data)
 
 
+async def update_household_member(
+    pool: asyncpg.Pool, household_id: UUID, member_id: UUID, role: str
+) -> Dict[str, Any]:
+    """
+    Mettre à jour le rôle d'un membre d'un ménage.
+
+    Args:
+        pool: Pool de connexions à la base de données
+        household_id: ID du ménage
+        member_id: ID du membre
+        role: Nouveau rôle du membre (admin, member, guest)
+
+    Returns:
+        Un dictionnaire contenant les données du membre mis à jour
+    """
+    async with pool.acquire() as conn:
+        # Vérifier que le membre existe dans ce ménage
+        existing_member = await conn.fetchval(
+            """
+            SELECT id
+            FROM household_members
+            WHERE household_id = $1 AND id = $2
+            """,
+            household_id,
+            member_id,
+        )
+
+        if not existing_member:
+            raise ValueError("Ce membre n'existe pas dans ce ménage")
+
+        # Mettre à jour le rôle du membre
+        await conn.execute(
+            """
+            UPDATE household_members
+            SET role = $1
+            WHERE household_id = $2 AND id = $3
+            """,
+            role,
+            household_id,
+            member_id,
+        )
+
+        # Récupérer les données complètes du membre mis à jour
+        member_data = await conn.fetchrow(
+            """
+            SELECT id, household_id, user_id, role
+            FROM household_members
+            WHERE id = $1
+            """,
+            member_id,
+        )
+
+        return dict(member_data)
+
+
+async def delete_household_member(
+    pool: asyncpg.Pool, household_id: UUID, member_id: UUID
+) -> bool:
+    """
+    Supprimer un membre d'un ménage.
+
+    Args:
+        pool: Pool de connexions à la base de données
+        household_id: ID du ménage
+        member_id: ID du membre
+
+    Returns:
+        True si le membre a été supprimé, False sinon
+    """
+    async with pool.acquire() as conn:
+        # Vérifier que le membre existe dans ce ménage avant suppression
+        existing_member = await conn.fetchval(
+            """
+            SELECT id
+            FROM household_members
+            WHERE household_id = $1 AND id = $2
+            """,
+            household_id,
+            member_id,
+        )
+
+        if not existing_member:
+            return False
+
+        # Supprimer le membre
+        rows_deleted = await conn.execute(
+            """
+            DELETE FROM household_members
+            WHERE household_id = $1 AND id = $2
+            """,
+            household_id,
+            member_id,
+        )
+
+        # Vérifier qu'une ligne a été supprimée
+        return "DELETE 1" in rows_deleted
+
+
 async def get_rooms(pool: asyncpg.Pool, household_id: UUID) -> List[Dict[str, Any]]:
     """
     Récupérer la liste des pièces d'un ménage.
@@ -326,7 +432,15 @@ async def get_tasks(pool: asyncpg.Pool, household_id: UUID) -> List[Dict[str, An
             household_id,
         )
 
-        return [dict(task) for task in tasks]
+        # Convertir les datetime en date si nécessaire
+        result = []
+        for task in tasks:
+            task_dict = dict(task)
+            if task_dict["due_date"] and hasattr(task_dict["due_date"], "date"):
+                task_dict["due_date"] = task_dict["due_date"].date()
+            result.append(task_dict)
+        
+        return result
 
 
 async def get_task(pool: asyncpg.Pool, task_id: UUID) -> Optional[Dict[str, Any]]:
@@ -350,7 +464,15 @@ async def get_task(pool: asyncpg.Pool, task_id: UUID) -> Optional[Dict[str, Any]
             task_id,
         )
 
-        return dict(task) if task else None
+        if not task:
+            return None
+            
+        # Convertir due_date de datetime à date si nécessaire
+        result = dict(task)
+        if result["due_date"] and hasattr(result["due_date"], "date"):
+            result["due_date"] = result["due_date"].date()
+        
+        return result
 
 
 async def create_task(
@@ -358,7 +480,7 @@ async def create_task(
     title: str,
     household_id: UUID,
     description: Optional[str] = None,
-    due_date: Optional[str] = None,
+    due_date: Optional[date] = None,
 ) -> Dict[str, Any]:
     """
     Créer une nouvelle tâche dans un ménage.
@@ -395,4 +517,9 @@ async def create_task(
             task_id,
         )
 
-        return dict(task_data)
+        # Convertir due_date de datetime à date si nécessaire
+        result = dict(task_data)
+        if result["due_date"] and hasattr(result["due_date"], "date"):
+            result["due_date"] = result["due_date"].date()
+        
+        return result

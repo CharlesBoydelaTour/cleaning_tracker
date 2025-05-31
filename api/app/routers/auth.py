@@ -53,8 +53,8 @@ async def request_password_reset(email: str):
     if not email or not email.strip():
         raise InvalidInput(
             field="email",
-            message="L'adresse email est requise",
-            received_value=email,
+            value=email,
+            reason="L'adresse email est requise",
         )
     return await AuthService.request_password_reset(email)
 

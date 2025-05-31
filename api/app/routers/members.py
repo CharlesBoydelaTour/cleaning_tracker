@@ -1,12 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas.member import HouseholdMemberCreate, HouseholdMember
+from app.schemas.member import HouseholdMemberCreate, HouseholdMember, HouseholdMemberUpdate
 from app.core.database import (
     get_household_members,
     get_household_member,
     create_household_member,
+    update_household_member,
+    delete_household_member,
 )
 import asyncpg
-from app.routers.households import get_db_pool, check_household_access
+from app.routers.households import get_db_pool, check_household_access, check_member_permissions
 from typing import List
 from uuid import UUID
 
@@ -113,9 +115,16 @@ async def add_household_member(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Vous n'avez pas les permissions nécessaires pour ajouter un membre à ce ménage.",
                 )
-            # TODO: Si 'check_household_access' ne vérifie pas déjà que l'utilisateur est admin,
-            # et que seuls les admins peuvent ajouter d'autres membres,
-            # ajoutez ici une vérification du rôle de 'requesting_user_id' pour le 'household_id'.
+            
+            # Vérifier que l'utilisateur a les permissions pour ajouter des membres
+            has_permission = await check_member_permissions(
+                db_pool, household_id, requesting_user_id, "add_members"
+            )
+            if not has_permission:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Vous n'avez pas les permissions nécessaires pour ajouter un membre à ce ménage.",
+                )
 
         # Utiliser l'ID du ménage du chemin de l'URL pour la création
         # Le household_id dans member_data est maintenant optionnel et ignoré ici en faveur de celui du chemin.
@@ -150,4 +159,124 @@ async def add_household_member(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Une erreur interne est survenue lors de l'ajout du membre.",
+        )
+
+
+@router.put("/{household_id}/members/{member_id}", response_model=HouseholdMember)
+async def update_household_member_endpoint(
+    household_id: UUID,
+    member_id: UUID,
+    requesting_user_id: UUID,  # ID de l'utilisateur effectuant la requête
+    member_update: HouseholdMemberUpdate,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """
+    Met à jour un membre d'un ménage (généralement son rôle).
+    L'utilisateur doit avoir les permissions nécessaires pour gérer les membres.
+    """
+    try:
+        # Vérifier que l'utilisateur a accès à ce ménage
+        has_access = await check_household_access(db_pool, household_id, requesting_user_id)
+        if not has_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Vous n'avez pas accès à ce ménage",
+            )
+
+        # Vérifier que l'utilisateur a les permissions pour gérer les membres
+        has_permission = await check_member_permissions(
+            db_pool, household_id, requesting_user_id, "manage_members"
+        )
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Vous n'avez pas les permissions nécessaires pour modifier un membre de ce ménage.",
+            )
+
+        # Vérifier que le membre existe dans ce ménage
+        existing_member = await get_household_member(db_pool, household_id, member_id)
+        if not existing_member:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Membre non trouvé (ID: {member_id})",
+            )
+
+        # Mettre à jour le membre (actuellement seul le rôle peut être mis à jour)
+        if member_update.role is not None:
+            updated_member = await update_household_member(
+                db_pool, household_id, member_id, member_update.role
+            )
+            return updated_member
+        else:
+            # Si aucune modification n'est demandée, retourner le membre existant
+            return existing_member
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la mise à jour du membre: {str(e)}",
+        )
+
+
+@router.delete("/{household_id}/members/{member_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_household_member_endpoint(
+    household_id: UUID,
+    member_id: UUID,
+    requesting_user_id: UUID,  # ID de l'utilisateur effectuant la requête
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+):
+    """
+    Supprime un membre d'un ménage.
+    L'utilisateur doit avoir les permissions nécessaires pour supprimer des membres.
+    """
+    try:
+        # Vérifier que l'utilisateur a accès à ce ménage
+        has_access = await check_household_access(db_pool, household_id, requesting_user_id)
+        if not has_access:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Vous n'avez pas accès à ce ménage",
+            )
+
+        # Vérifier que l'utilisateur a les permissions pour supprimer des membres
+        has_permission = await check_member_permissions(
+            db_pool, household_id, requesting_user_id, "delete_members"
+        )
+        if not has_permission:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Vous n'avez pas les permissions nécessaires pour supprimer un membre de ce ménage.",
+            )
+
+        # Vérifier que le membre existe dans ce ménage
+        existing_member = await get_household_member(db_pool, household_id, member_id)
+        if not existing_member:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Membre non trouvé (ID: {member_id})",
+            )
+
+        # Supprimer le membre
+        success = await delete_household_member(db_pool, household_id, member_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Membre non trouvé (ID: {member_id})",
+            )
+
+        # HTTP 204 No Content - pas de corps de réponse
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la suppression du membre: {str(e)}",
         )

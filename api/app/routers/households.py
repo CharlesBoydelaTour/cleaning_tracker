@@ -4,6 +4,7 @@ from app.core.database import get_households, create_household
 from app.core.exceptions import DatabaseError, UnauthorizedAccess, HouseholdNotFound
 import asyncpg
 from uuid import UUID
+from typing import Optional
 
 router = APIRouter()
 
@@ -71,8 +72,7 @@ async def get_household(
             if not has_access:
                 raise UnauthorizedAccess(
                     resource="ménage",
-                    resource_id=str(household_id),
-                    user_id=str(user_id),
+                    action="read",  # MODIFIED: Added missing 'action' argument
                 )
 
         # Récupérer les détails du ménage
@@ -105,6 +105,12 @@ async def check_household_access(
     """
     Vérifie si un utilisateur a accès à un ménage.
     """
+    # Convertir user_id de string vers UUID si nécessaire
+    try:
+        user_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
+    except ValueError:
+        return False
+        
     async with pool.acquire() as conn:
         member = await conn.fetchval(
             """
@@ -113,6 +119,58 @@ async def check_household_access(
             WHERE household_id = $1 AND user_id = $2
             """,
             household_id,
-            user_id,
+            user_uuid,
         )
         return member is not None
+
+
+async def get_user_role_in_household(
+    pool: asyncpg.Pool, household_id: UUID, user_id: UUID
+) -> str:
+    """
+    Récupère le rôle d'un utilisateur dans un ménage.
+
+    Returns:
+        Le rôle de l'utilisateur ('admin', 'member', 'guest') ou None s'il n'est pas membre
+    """
+    async with pool.acquire() as conn:
+        role = await conn.fetchval(
+            """
+            SELECT role
+            FROM household_members
+            WHERE household_id = $1 AND user_id = $2
+            """,
+            household_id,
+            user_id,
+        )
+        return role
+
+
+async def check_member_permissions(
+    pool: asyncpg.Pool, household_id: UUID, user_id: UUID, required_permission: str
+) -> bool:
+    """
+    Vérifie si un utilisateur a les permissions requises dans un ménage.
+
+    Args:
+        pool: Pool de connexions à la base de données
+        household_id: ID du ménage
+        user_id: ID de l'utilisateur
+        required_permission: Permission requise ('add_members', 'manage_members', etc.)
+
+    Returns:
+        True si l'utilisateur a les permissions, False sinon
+    """
+    user_role = await get_user_role_in_household(pool, household_id, user_id)
+
+    if not user_role:
+        return False
+
+    # Définir les permissions par rôle
+    permissions = {
+        "admin": ["add_members", "manage_members", "delete_members"],
+        "member": [],  # Les membres ordinaires ne peuvent pas ajouter d'autres membres
+        "guest": [],  # Les invités ne peuvent rien faire
+    }
+
+    return required_permission in permissions.get(user_role, [])

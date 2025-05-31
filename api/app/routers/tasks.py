@@ -33,8 +33,7 @@ async def list_tasks(
             if not has_access:
                 raise UnauthorizedAccess(
                     resource="ménage",
-                    resource_id=str(household_id),
-                    user_id=str(user_id),
+                    action="read_tasks",
                 )
 
         tasks = await get_tasks(db_pool, household_id)
@@ -65,8 +64,7 @@ async def get_task_details(
             if not has_access:
                 raise UnauthorizedAccess(
                     resource="ménage",
-                    resource_id=str(household_id),
-                    user_id=str(user_id),
+                    action="read_task",
                 )
 
         task = await get_task(db_pool, task_id)
@@ -109,17 +107,15 @@ async def create_new_task(
             if not has_access:
                 raise UnauthorizedAccess(
                     resource="ménage",
-                    resource_id=str(household_id),
-                    user_id=str(user_id),
+                    action="create_task",
                 )
 
         # S'assurer que l'ID du ménage dans le chemin correspond à celui dans la requête
         if task.household_id != household_id:
             raise InvalidInput(
                 field="household_id",
-                message="L'ID du ménage dans le chemin ne correspond pas à celui dans la requête",
-                received_value=str(task.household_id),
-                expected_value=str(household_id),
+                value=str(task.household_id),
+                reason=f"L'ID du ménage dans le chemin ({household_id}) ne correspond pas à celui dans la requête ({task.household_id})",
             )
 
         # Par défaut, la date d'échéance est aujourd'hui si non spécifiée

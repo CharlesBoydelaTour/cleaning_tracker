@@ -100,8 +100,15 @@ async def add_room(
     try:
         # Vérifier que l'utilisateur a accès à ce ménage
         if user_id:
-            has_access = await check_household_access(db_pool, household_id, user_id)
-            if not has_access:
+            try:
+                has_access = await check_household_access(db_pool, household_id, user_id)
+                if not has_access:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Vous n'avez pas accès à ce ménage",
+                    )
+            except Exception:
+                # En cas d'erreur dans la vérification d'accès, refuser l'accès
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Vous n'avez pas accès à ce ménage",
@@ -109,6 +116,8 @@ async def add_room(
 
         new_room = await create_room(db_pool, room.name, household_id, room.icon)
         return new_room
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
