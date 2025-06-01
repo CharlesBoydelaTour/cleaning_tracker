@@ -11,6 +11,7 @@ dependencies = [
   "python-dotenv>=1.0.0",
   "pydantic>=2.1.1",
   "celery>=5.5.0",
+  "redis>=5.0.0",
   "passlib[bcrypt]>=1.7.4",
   "python-jose>=3.3.0",
   "pytest>=8.3.5",
@@ -23,6 +24,7 @@ dependencies = [
   "email-validator>=2.0.0",
   "python-dateutil>=2.9.0.post0",
   "holidays>=0.73",
+  "aiosmtplib>=4.0.1",
 ]
 
 [project.optional-dependencies]

@@ -41,5 +41,18 @@ class Settings(BaseSettings):
     log_max_bytes: int = 10485760
     log_backup_count: int = 5  # Nombre de fichiers de backup à conserver
 
+    # SMTP settings pour les emails
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_password: Optional[str] = None
+    sender_email: str = "noreply@cleaningtracker.com"
+    sender_name: str = "Cleaning Tracker"
+    
+    # URL de l'application (pour les liens dans les emails)
+    app_url: str = "https://cleaningtracker.com"
+    
+    # Expo push notifications
+    expo_access_token: Optional[str] = None
 
 settings = Settings()
