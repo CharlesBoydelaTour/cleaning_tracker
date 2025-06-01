@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime, timezone
 from app.services.notification_service import notification_service
 

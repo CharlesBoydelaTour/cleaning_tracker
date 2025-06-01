@@ -1,12 +1,10 @@
 """
 Tests d'intégration pour les endpoints d'authentification
 """
-import pytest
 from httpx import AsyncClient
 from unittest.mock import MagicMock
 from datetime import datetime, timezone
 
-from app.services.auth_service import AuthService
 
 
 class TestAuthEndpoints:
@@ -331,7 +329,7 @@ class TestAuthWorkflow:
         # 1. Inscription
         signup_response = await async_client.post("/auth/signup", json=valid_signup_data)
         assert signup_response.status_code == 200
-        signup_data = signup_response.json()
+        signup_response.json()
         
         # 2. Connexion avec les mêmes identifiants
         login_data = {

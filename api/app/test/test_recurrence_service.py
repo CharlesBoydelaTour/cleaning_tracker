@@ -2,11 +2,10 @@
 Tests pour le service de gestion des récurrences
 """
 import pytest
-from datetime import date, datetime, timedelta
-from dateutil.rrule import DAILY, WEEKLY, MONTHLY
+from datetime import date, timedelta
 
-from app.services.recurrence import RecurrenceService, RecurrenceInfo, recurrence_service
-from app.core.exceptions import InvalidInput, BusinessRuleViolation
+from app.services.recurrence import RecurrenceService, recurrence_service
+from app.core.exceptions import BusinessRuleViolation
 
 
 class TestRecurrenceValidation:
@@ -74,7 +73,7 @@ class TestRecurrenceValidation:
     def test_validate_too_many_occurrences(self):
         """Test de validation des limites d'occurrences"""
         # Règle qui génère trop d'occurrences (plusieurs fois par jour)
-        with pytest.raises(BusinessRuleViolation) as exc_info:
+        with pytest.raises(BusinessRuleViolation):
             info = recurrence_service.validate_rrule("FREQ=HOURLY")
             if info.is_valid:  # Si la validation basique passe
                 recurrence_service._validate_limits(info, "FREQ=HOURLY")

@@ -6,7 +6,7 @@ from httpx import AsyncClient
 from uuid import uuid4
 import asyncpg
 
-from app.schemas.member import HouseholdMemberCreate, HouseholdMember
+from app.schemas.member import HouseholdMemberCreate
 from app.core.database import (
     create_household, 
     create_household_member,

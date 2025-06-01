@@ -1,12 +1,11 @@
 """
 Endpoints pour gérer les préférences de notifications
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Dict, Any, Optional
+from fastapi import APIRouter, Depends, status
+from typing import Optional
 from uuid import UUID
 from pydantic import BaseModel, Field
 
-from app.core.database import init_db_pool
 from app.core.security import get_current_user
 from app.core.exceptions import UnauthorizedAccess, UserNotFound, DatabaseError
 from app.core.logging import get_logger, with_context
@@ -375,7 +374,7 @@ async def delete_user_notification_preferences(
             )
         
         async with db_pool.acquire() as conn:
-            result = await conn.execute(
+            await conn.execute(
                 """
                 DELETE FROM user_notification_preferences
                 WHERE user_id = $1

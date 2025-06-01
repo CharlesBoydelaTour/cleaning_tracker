@@ -7,7 +7,6 @@ from app.schemas.task import (
     TaskDefinition,
     TaskDefinitionCreate,
     TaskDefinitionUpdate,
-    TaskDefinitionFilter,
     TaskOccurrence
 )
 from app.core.database import (
@@ -23,8 +22,7 @@ from app.core.exceptions import (
     TaskNotFound,
     UnauthorizedAccess,
     InvalidInput,
-    DatabaseError,
-    InsufficientPermissions
+    DatabaseError
 )
 from app.core.security import get_current_user
 from app.services.recurrence import recurrence_service

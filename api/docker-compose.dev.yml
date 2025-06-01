@@ -1,0 +1,94 @@
+services:
+  # API en mode développement
+  api:
+    build: .
+    container_name: cleaning_tracker_api_dev
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+      - LOG_FORMAT=text
+    volumes:
+      - .:/app
+      - /app/.venv # Ajout pour préserver le venv de l'image
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    # Hot reload avec --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Worker Celery en mode dev
+  celery_worker:
+    build: .
+    container_name: cleaning_tracker_celery_worker_dev
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - .:/app
+      - /app/.venv # Ajout pour préserver le venv de l'image
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    # Single worker pour debug
+    command: celery -A app.core.celery_app worker --loglevel=debug --concurrency=1
+
+  # Beat en mode dev (optionnel)
+  celery_beat:
+    build: .
+    container_name: cleaning_tracker_celery_beat_dev
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=development
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - .:/app
+      - /app/.venv # Ajout pour préserver le venv de l'image
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    restart: unless-stopped
+    command: celery -A app.core.celery_app beat --loglevel=debug
+    profiles:
+      - beat
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: cleaning_tracker_redis_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data_dev:/data
+    command: redis-server --appendonly yes
+
+  # Redis Commander pour debugging
+  redis_commander:
+    image: rediscommander/redis-commander:latest
+    container_name: cleaning_tracker_redis_commander_dev
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+
+volumes:
+  redis_data_dev:

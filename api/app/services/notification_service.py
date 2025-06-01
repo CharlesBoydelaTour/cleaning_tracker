@@ -12,7 +12,7 @@ import aiosmtplib
 from app.config import settings
 from app.core.database import init_db_pool
 from app.core.logging import get_logger, with_context
-from app.core.exceptions import ExternalServiceError, InvalidInput
+from app.core.exceptions import InvalidInput
 
 logger = get_logger(__name__)
 

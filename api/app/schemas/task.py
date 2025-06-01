@@ -1,6 +1,6 @@
 from pydantic import BaseModel, field_validator, model_validator, ConfigDict
 from datetime import date, datetime
-from typing import Optional, Literal
+from typing import Optional
 from uuid import UUID
 from enum import Enum
 

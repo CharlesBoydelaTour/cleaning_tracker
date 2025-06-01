@@ -1,10 +1,9 @@
 """
 Tests pour la gestion des erreurs et les exceptions personnalisées
 """
-import pytest
 from httpx import AsyncClient
 from uuid import uuid4
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock
 import asyncpg
 
 from app.core.exceptions import (

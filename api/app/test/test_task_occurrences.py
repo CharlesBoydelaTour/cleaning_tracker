@@ -3,12 +3,11 @@ Tests pour la gestion des occurrences de tâches
 """
 import pytest
 from httpx import AsyncClient
-from uuid import uuid4, UUID
+from uuid import uuid4
 from datetime import date, datetime, timedelta, timezone
 import asyncpg
 
 from app.schemas.task import (
-    TaskOccurrence,
     TaskOccurrenceComplete,
     TaskOccurrenceSnooze,
     TaskStatus
@@ -20,7 +19,6 @@ from app.core.database import (
     update_task_occurrence_status,
     complete_task_occurrence,
     generate_occurrences_for_definition,
-    generate_occurrences_for_household,
     check_and_update_overdue_occurrences
 )
 

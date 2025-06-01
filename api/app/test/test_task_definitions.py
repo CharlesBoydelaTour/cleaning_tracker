@@ -3,11 +3,11 @@ Tests pour la gestion des définitions de tâches
 """
 import pytest
 from httpx import AsyncClient
-from uuid import uuid4, UUID
+from uuid import uuid4
 from datetime import date
 import asyncpg
 
-from app.schemas.task import TaskDefinitionCreate, TaskDefinition
+from app.schemas.task import TaskDefinitionCreate
 from app.core.database import (
     create_household,
     create_task_definition,

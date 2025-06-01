@@ -4,7 +4,6 @@ from app.core.database import get_households, create_household
 from app.core.exceptions import DatabaseError, UnauthorizedAccess, HouseholdNotFound
 import asyncpg
 from uuid import UUID
-from typing import Optional
 
 router = APIRouter()
 

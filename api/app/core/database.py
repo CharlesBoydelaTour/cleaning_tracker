@@ -3,7 +3,6 @@ from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import date, datetime, timedelta
 from dateutil.rrule import rrulestr
-from dateutil.relativedelta import relativedelta
 
 from app.config import settings
 from app.schemas.task import TaskStatus
@@ -411,7 +410,7 @@ async def update_task_occurrence_status(
     """
     async with pool.acquire() as conn:
         # Construire la requête UPDATE
-        update_fields = [f"status = $2"]
+        update_fields = ["status = $2"]
         params = [occurrence_id, status.value]
         param_count = 2
         

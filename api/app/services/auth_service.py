@@ -5,7 +5,6 @@ from app.core.security import create_access_token, create_refresh_token
 from app.schemas.auth import UserSignup, UserLogin, AuthResponse, UserResponse, Token
 from app.core.supabase_client import supabase_admin
 from app.core.logging import get_logger, with_context
-from app.config import settings  # Ajout potentiel si SITE_URL est utilisé
 
 logger = get_logger(__name__)
 
@@ -440,7 +439,7 @@ class AuthService:
             # Si une URL de redirection spécifique est nécessaire, elle doit être configurée.
             # Par exemple: redirect_to=settings.EMAIL_VERIFICATION_REDIRECT_URL
             # Pour l'instant, on suppose que Supabase gère la redirection par défaut.
-            response = supabase.auth.api.send_verification_email(email=email)  # ou supabase.auth.resend(email=email, type="signup")
+            supabase.auth.api.send_verification_email(email=email)  # ou supabase.auth.resend(email=email, type="signup")
 
             # La réponse de send_verification_email ne contient généralement pas d'erreur explicite
             # mais lève une exception en cas de problème majeur.

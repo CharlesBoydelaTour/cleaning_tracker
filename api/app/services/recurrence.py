@@ -1,13 +1,11 @@
 """
 Service de gestion des récurrences pour les tâches
 """
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Tuple
 from datetime import date, datetime, time, timedelta
-from dateutil.rrule import rrule, rrulestr, DAILY, WEEKLY, MONTHLY, YEARLY
-from dateutil.parser import parse
+from dateutil.rrule import rrulestr, DAILY, WEEKLY, MONTHLY, YEARLY
 from dataclasses import dataclass
 import holidays
-from uuid import UUID
 
 from app.core.logging import get_logger
 from app.core.exceptions import InvalidInput, BusinessRuleViolation

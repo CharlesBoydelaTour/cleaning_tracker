@@ -2,7 +2,7 @@
 Workers Celery pour le traitement des notifications
 """
 from datetime import datetime, date, timedelta, timezone
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any, Optional
 import asyncio
 
 from app.core.celery_app import celery_app
@@ -68,7 +68,7 @@ async def _send_daily_reminders_async() -> Dict[str, Any]:
         async with pool.acquire() as conn:
             # Récupérer toutes les occurrences du jour non complétées
             today = date.today()
-            tomorrow = today + timedelta(days=1)
+            today + timedelta(days=1)
             
             occurrences = await conn.fetch(
                 """

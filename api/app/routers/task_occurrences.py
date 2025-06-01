@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, Query, status, Body
+from fastapi import APIRouter, Depends, Query, Body
 from typing import List, Optional
 from uuid import UUID
-from datetime import date, datetime
+from datetime import date
 
 from app.schemas.task import (
     TaskOccurrence,
-    TaskOccurrenceFilter,
     TaskOccurrenceComplete,
     TaskOccurrenceSnooze,
     TaskOccurrenceSkip,

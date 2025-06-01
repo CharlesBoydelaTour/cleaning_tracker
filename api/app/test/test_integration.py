@@ -1,7 +1,5 @@
 # test_integration.py
 import asyncio
-from datetime import datetime, date, timezone
-from uuid import uuid4
 from app.core.database import init_db_pool
 from app.services.notification_service import notification_service
 
@@ -9,9 +7,8 @@ async def test_full_flow():
     pool = await init_db_pool()
     
     try:
-        async with pool.acquire() as conn:
+        async with pool.acquire():
             # 1. Créer une occurrence de test
-            user_id = "TON_USER_ID"  # Remplace par un vrai user_id
             
             # 2. Planifier les rappels
             occurrence_id = "OCCURRENCE_ID"  # Remplace par une vraie occurrence

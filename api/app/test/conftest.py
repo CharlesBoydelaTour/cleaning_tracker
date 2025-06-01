@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.core.database import init_db_pool
 from app.core.security import create_access_token, create_refresh_token
-from app.config import settings
 from app.schemas.task import TaskStatus
 
 
