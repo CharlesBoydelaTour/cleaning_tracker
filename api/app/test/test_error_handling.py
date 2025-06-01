@@ -18,7 +18,7 @@ from app.core.exceptions import (
     InvalidInput,
     get_http_status_from_exception
 )
-from app.core.database import create_household
+from app.core.database import create_household, create_user
 
 
 class TestCustomExceptions:
@@ -299,17 +299,31 @@ class TestErrorHandlingIntegration:
         mocker
     ):
         """Test de la gestion d'erreurs en cascade"""
-        # Créer un ménage
-        household = await create_household(db_pool, "Test House")
+        # Créer un utilisateur et un ménage 
+        user = await create_user(
+            db_pool, 
+            "test@example.com", 
+            "testuser", 
+            "Test User"
+        )
+        household = await create_household(db_pool, "Test House", user['id'])
         
-        # Mock pour faire échouer get_tasks - utiliser le chemin où elle est importée
+        # Créer des en-têtes d'authentification
+        from app.core.security import create_access_token
+        token = create_access_token(data={"sub": str(user['id'])})
+        auth_headers = {"Authorization": f"Bearer {token}"}
+        
+        # Mock pour faire échouer get_task_definitions - utiliser le chemin où elle est importée
         mocker.patch(
-            "app.routers.tasks.get_tasks",
+            "app.routers.task_definitions.get_task_definitions",
             side_effect=asyncpg.PostgresError("Connection lost")
         )
         
-        # Essayer de récupérer les tâches
-        response = await async_client.get(f"/households/{household['id']}/tasks")
+        # Essayer de récupérer les définitions de tâches
+        response = await async_client.get(
+            f"/households/{household['id']}/task-definitions",
+            headers=auth_headers
+        )
         
         assert response.status_code == 500
         error = response.json()

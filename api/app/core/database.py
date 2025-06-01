@@ -1,38 +1,640 @@
 import asyncpg
-from app.config import settings
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from datetime import date
+from datetime import date, datetime, timedelta
+from dateutil.rrule import rrulestr
+from dateutil.relativedelta import relativedelta
+
+from app.config import settings
+from app.schemas.task import TaskStatus
 
 
 async def init_db_pool():
-
-    # Assurons-nous que l'URL est au format attendu par asyncpg
-    # Remplacer postgresql+asyncpg:// par postgresql:// si nécessaire
+    """Initialise le pool de connexions à la base de données"""
     database_url = settings.database_url
     if database_url.startswith("postgresql+asyncpg://"):
         database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
-
-    print(f"Connexion à la base de données avec l'URL: {database_url}")
+    
     return await asyncpg.create_pool(dsn=database_url)
 
 
-async def create_household(
-    pool: asyncpg.Pool, name: str, created_by_user_id: Optional[UUID] = None
+# ============================================================================
+# TASK DEFINITIONS CRUD
+# ============================================================================
+
+async def create_task_definition(
+    pool: asyncpg.Pool,
+    title: str,
+    recurrence_rule: str,
+    household_id: Optional[UUID] = None,
+    description: Optional[str] = None,
+    estimated_minutes: Optional[int] = None,
+    room_id: Optional[UUID] = None,
+    is_catalog: bool = False,
+    created_by: Optional[UUID] = None
 ) -> Dict[str, Any]:
     """
-    Créer un nouveau ménage dans la base de données.
-
+    Créer une nouvelle définition de tâche.
+    
     Args:
         pool: Pool de connexions à la base de données
-        name: Nom du ménage
-        created_by_user_id: ID de l'utilisateur qui crée le ménage (optionnel)
-
+        title: Titre de la tâche
+        recurrence_rule: Règle de récurrence (format RRULE)
+        household_id: ID du ménage (None pour les tâches catalogue)
+        description: Description de la tâche
+        estimated_minutes: Durée estimée en minutes
+        room_id: ID de la pièce associée
+        is_catalog: Si True, c'est une tâche du catalogue global
+        created_by: ID de l'utilisateur créateur
+    
     Returns:
-        Un dictionnaire contenant les données du ménage créé
+        Dict contenant les données de la définition créée
     """
     async with pool.acquire() as conn:
-        # Insérer le ménage dans la table households
+        task_def_id = await conn.fetchval(
+            """
+            INSERT INTO task_definitions 
+                (title, description, recurrence_rule, estimated_minutes, 
+                 room_id, household_id, is_catalog, created_by, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+            RETURNING id
+            """,
+            title, description, recurrence_rule, estimated_minutes,
+            room_id, household_id, is_catalog, created_by
+        )
+        
+        # Récupérer la définition complète
+        task_def = await conn.fetchrow(
+            """
+            SELECT id, title, description, recurrence_rule, estimated_minutes,
+                   room_id, household_id, is_catalog, created_by, created_at
+            FROM task_definitions
+            WHERE id = $1
+            """,
+            task_def_id
+        )
+        
+        return dict(task_def)
+
+
+async def get_task_definitions(
+    pool: asyncpg.Pool,
+    household_id: Optional[UUID] = None,
+    is_catalog: Optional[bool] = None,
+    room_id: Optional[UUID] = None,
+    created_by: Optional[UUID] = None
+) -> List[Dict[str, Any]]:
+    """
+    Récupérer les définitions de tâches selon les filtres.
+    
+    Args:
+        pool: Pool de connexions
+        household_id: Filtrer par ménage
+        is_catalog: Filtrer par type (catalogue ou non)
+        room_id: Filtrer par pièce
+        created_by: Filtrer par créateur
+    
+    Returns:
+        Liste des définitions de tâches
+    """
+    async with pool.acquire() as conn:
+        # Construire la requête dynamiquement
+        query = """
+            SELECT td.*, r.name as room_name
+            FROM task_definitions td
+            LEFT JOIN rooms r ON td.room_id = r.id
+            WHERE 1=1
+        """
+        params = []
+        param_count = 0
+        
+        if household_id is not None:
+            param_count += 1
+            query += f" AND td.household_id = ${param_count}"
+            params.append(household_id)
+        
+        if is_catalog is not None:
+            param_count += 1
+            query += f" AND td.is_catalog = ${param_count}"
+            params.append(is_catalog)
+        
+        if room_id is not None:
+            param_count += 1
+            query += f" AND td.room_id = ${param_count}"
+            params.append(room_id)
+        
+        if created_by is not None:
+            param_count += 1
+            query += f" AND td.created_by = ${param_count}"
+            params.append(created_by)
+        
+        query += " ORDER BY td.title"
+        
+        rows = await conn.fetch(query, *params)
+        return [dict(row) for row in rows]
+
+
+async def get_task_definition(
+    pool: asyncpg.Pool,
+    task_def_id: UUID
+) -> Optional[Dict[str, Any]]:
+    """
+    Récupérer une définition de tâche spécifique.
+    
+    Args:
+        pool: Pool de connexions
+        task_def_id: ID de la définition
+    
+    Returns:
+        Dict avec les données ou None si non trouvée
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT td.*, r.name as room_name
+            FROM task_definitions td
+            LEFT JOIN rooms r ON td.room_id = r.id
+            WHERE td.id = $1
+            """,
+            task_def_id
+        )
+        
+        return dict(row) if row else None
+
+
+async def update_task_definition(
+    pool: asyncpg.Pool,
+    task_def_id: UUID,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Mettre à jour une définition de tâche.
+    
+    Args:
+        pool: Pool de connexions
+        task_def_id: ID de la définition
+        **kwargs: Champs à mettre à jour
+    
+    Returns:
+        Dict avec les données mises à jour
+    """
+    async with pool.acquire() as conn:
+        # Construire la requête UPDATE dynamiquement
+        update_fields = []
+        params = [task_def_id]
+        param_count = 1
+        
+        allowed_fields = ['title', 'description', 'recurrence_rule', 
+                         'estimated_minutes', 'room_id']
+        
+        for field, value in kwargs.items():
+            if field in allowed_fields and value is not None:
+                param_count += 1
+                update_fields.append(f"{field} = ${param_count}")
+                params.append(value)
+        
+        if not update_fields:
+            # Rien à mettre à jour
+            return await get_task_definition(pool, task_def_id)
+        
+        query = f"""
+            UPDATE task_definitions
+            SET {', '.join(update_fields)}
+            WHERE id = $1
+            RETURNING *
+        """
+        
+        row = await conn.fetchrow(query, *params)
+        return dict(row) if row else None
+
+
+async def delete_task_definition(
+    pool: asyncpg.Pool,
+    task_def_id: UUID
+) -> bool:
+    """
+    Supprimer une définition de tâche.
+    Note: Les occurrences liées seront supprimées en cascade.
+    
+    Args:
+        pool: Pool de connexions
+        task_def_id: ID de la définition
+    
+    Returns:
+        True si supprimée, False sinon
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "DELETE FROM task_definitions WHERE id = $1",
+            task_def_id
+        )
+        return "DELETE 1" in result
+
+
+# ============================================================================
+# TASK OCCURRENCES CRUD
+# ============================================================================
+
+async def create_task_occurrence(
+    pool: asyncpg.Pool,
+    task_id: UUID,
+    scheduled_date: date,
+    due_at: datetime,
+    assigned_to: Optional[UUID] = None
+) -> Dict[str, Any]:
+    """
+    Créer une nouvelle occurrence de tâche.
+    
+    Args:
+        pool: Pool de connexions
+        task_id: ID de la définition de tâche
+        scheduled_date: Date prévue
+        due_at: Date/heure d'échéance
+        assigned_to: ID de l'utilisateur assigné
+    
+    Returns:
+        Dict avec les données de l'occurrence créée
+    """
+    async with pool.acquire() as conn:
+        try:
+            occurrence_id = await conn.fetchval(
+                """
+                INSERT INTO task_occurrences 
+                    (task_id, scheduled_date, due_at, status, assigned_to, created_at)
+                VALUES ($1, $2, $3, $4, $5, NOW())
+                RETURNING id
+                """,
+                task_id, scheduled_date, due_at, TaskStatus.PENDING.value, assigned_to
+            )
+            
+            return await get_task_occurrence(pool, occurrence_id)
+            
+        except asyncpg.UniqueViolationError:
+            # Une occurrence existe déjà pour cette tâche à cette date
+            existing = await conn.fetchrow(
+                """
+                SELECT * FROM task_occurrences
+                WHERE task_id = $1 AND scheduled_date = $2
+                """,
+                task_id, scheduled_date
+            )
+            return dict(existing) if existing else None
+
+
+async def get_task_occurrences(
+    pool: asyncpg.Pool,
+    household_id: Optional[UUID] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    status: Optional[TaskStatus] = None,
+    assigned_to: Optional[UUID] = None,
+    room_id: Optional[UUID] = None
+) -> List[Dict[str, Any]]:
+    """
+    Récupérer les occurrences de tâches selon les filtres.
+    
+    Args:
+        pool: Pool de connexions
+        household_id: Filtrer par ménage
+        start_date: Date de début
+        end_date: Date de fin
+        status: Filtrer par statut
+        assigned_to: Filtrer par assignation
+        room_id: Filtrer par pièce
+    
+    Returns:
+        Liste des occurrences avec les infos de définition
+    """
+    async with pool.acquire() as conn:
+        query = """
+            SELECT 
+                o.*,
+                td.title as task_title,
+                td.description as task_description,
+                td.estimated_minutes,
+                td.room_id,
+                r.name as room_name,
+                u.email as assigned_user_email
+            FROM task_occurrences o
+            JOIN task_definitions td ON o.task_id = td.id
+            LEFT JOIN rooms r ON td.room_id = r.id
+            LEFT JOIN auth.users u ON o.assigned_to = u.id
+            WHERE 1=1
+        """
+        params = []
+        param_count = 0
+        
+        if household_id is not None:
+            param_count += 1
+            query += f" AND td.household_id = ${param_count}"
+            params.append(household_id)
+        
+        if start_date is not None:
+            param_count += 1
+            query += f" AND o.scheduled_date >= ${param_count}"
+            params.append(start_date)
+        
+        if end_date is not None:
+            param_count += 1
+            query += f" AND o.scheduled_date <= ${param_count}"
+            params.append(end_date)
+        
+        if status is not None:
+            param_count += 1
+            query += f" AND o.status = ${param_count}"
+            params.append(status.value if hasattr(status, 'value') else status)
+        
+        if assigned_to is not None:
+            param_count += 1
+            query += f" AND o.assigned_to = ${param_count}"
+            params.append(assigned_to)
+        
+        if room_id is not None:
+            param_count += 1
+            query += f" AND td.room_id = ${param_count}"
+            params.append(room_id)
+        
+        query += " ORDER BY o.due_at"
+        
+        rows = await conn.fetch(query, *params)
+        return [dict(row) for row in rows]
+
+
+async def get_task_occurrence(
+    pool: asyncpg.Pool,
+    occurrence_id: UUID
+) -> Optional[Dict[str, Any]]:
+    """
+    Récupérer une occurrence spécifique avec ses détails.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT 
+                o.*,
+                td.title as task_title,
+                td.description as task_description,
+                td.estimated_minutes,
+                td.room_id,
+                td.household_id,
+                r.name as room_name,
+                u.email as assigned_user_email
+            FROM task_occurrences o
+            JOIN task_definitions td ON o.task_id = td.id
+            LEFT JOIN rooms r ON td.room_id = r.id
+            LEFT JOIN auth.users u ON o.assigned_to = u.id
+            WHERE o.id = $1
+            """,
+            occurrence_id
+        )
+        
+        return dict(row) if row else None
+
+
+async def update_task_occurrence_status(
+    pool: asyncpg.Pool,
+    occurrence_id: UUID,
+    status: TaskStatus,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    Mettre à jour le statut d'une occurrence.
+    
+    Args:
+        pool: Pool de connexions
+        occurrence_id: ID de l'occurrence
+        status: Nouveau statut
+        **kwargs: Champs additionnels (assigned_to, snoozed_until)
+    
+    Returns:
+        Dict avec les données mises à jour
+    """
+    async with pool.acquire() as conn:
+        # Construire la requête UPDATE
+        update_fields = [f"status = $2"]
+        params = [occurrence_id, status.value]
+        param_count = 2
+        
+        if 'assigned_to' in kwargs:
+            param_count += 1
+            update_fields.append(f"assigned_to = ${param_count}")
+            params.append(kwargs['assigned_to'])
+        
+        if 'snoozed_until' in kwargs and status == TaskStatus.SNOOZED:
+            param_count += 1
+            update_fields.append(f"snoozed_until = ${param_count}")
+            params.append(kwargs['snoozed_until'])
+        elif status != TaskStatus.SNOOZED:
+            # Effacer snoozed_until si le statut n'est pas SNOOZED
+            update_fields.append("snoozed_until = NULL")
+        
+        query = f"""
+            UPDATE task_occurrences
+            SET {', '.join(update_fields)}
+            WHERE id = $1
+            RETURNING *
+        """
+        
+        await conn.execute(query, *params)
+        return await get_task_occurrence(pool, occurrence_id)
+
+
+async def complete_task_occurrence(
+    pool: asyncpg.Pool,
+    occurrence_id: UUID,
+    completed_by: UUID,
+    duration_minutes: Optional[int] = None,
+    comment: Optional[str] = None,
+    photo_url: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Marquer une occurrence comme complétée et créer l'enregistrement de complétion.
+    
+    Args:
+        pool: Pool de connexions
+        occurrence_id: ID de l'occurrence
+        completed_by: ID de l'utilisateur qui complète
+        duration_minutes: Durée réelle en minutes
+        comment: Commentaire optionnel
+        photo_url: URL de photo optionnelle
+    
+    Returns:
+        Dict avec les données de complétion
+    """
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Mettre à jour le statut de l'occurrence
+            await conn.execute(
+                """
+                UPDATE task_occurrences
+                SET status = $1
+                WHERE id = $2
+                """,
+                TaskStatus.DONE.value, occurrence_id
+            )
+            
+            # Créer l'enregistrement de complétion
+            completion = await conn.fetchrow(
+                """
+                INSERT INTO task_completions
+                    (occurrence_id, completed_by, completed_at, 
+                     duration_minutes, comment, photo_url, created_at)
+                VALUES ($1, $2, NOW(), $3, $4, $5, NOW())
+                RETURNING *
+                """,
+                occurrence_id, completed_by, duration_minutes, comment, photo_url
+            )
+            
+            return dict(completion)
+
+
+# ============================================================================
+# GÉNÉRATION D'OCCURRENCES
+# ============================================================================
+
+async def generate_occurrences_for_definition(
+    pool: asyncpg.Pool,
+    task_def_id: UUID,
+    start_date: date,
+    end_date: date,
+    max_occurrences: int = 100
+) -> List[Dict[str, Any]]:
+    """
+    Générer les occurrences pour une définition de tâche sur une période.
+    
+    Args:
+        pool: Pool de connexions
+        task_def_id: ID de la définition de tâche
+        start_date: Date de début de génération
+        end_date: Date de fin de génération
+        max_occurrences: Nombre maximum d'occurrences à générer
+    
+    Returns:
+        Liste des occurrences créées
+    """
+    async with pool.acquire() as conn:
+        # Récupérer la définition
+        task_def = await conn.fetchrow(
+            "SELECT * FROM task_definitions WHERE id = $1",
+            task_def_id
+        )
+        
+        if not task_def:
+            return []
+        
+        # Parser la règle de récurrence
+        try:
+            # Convertir les dates en datetime pour rrule
+            start_datetime = datetime.combine(start_date, datetime.min.time())
+            end_datetime = datetime.combine(end_date, datetime.max.time())
+            rrule = rrulestr(task_def['recurrence_rule'], dtstart=start_datetime)
+        except Exception:
+            # Si la règle est invalide, ne pas générer d'occurrences
+            return []
+        
+        created_occurrences = []
+        
+        # Générer les dates selon la règle
+        for occurrence_date in rrule.between(start_datetime, end_datetime, inc=True):
+            if len(created_occurrences) >= max_occurrences:
+                break
+            
+            scheduled_date = occurrence_date.date()
+            
+            # Calculer l'heure d'échéance (par défaut à 23:59)
+            due_at = datetime.combine(scheduled_date, datetime.max.time())
+            
+            # Créer l'occurrence
+            occurrence = await create_task_occurrence(
+                pool, task_def_id, scheduled_date, due_at
+            )
+            
+            if occurrence:
+                created_occurrences.append(occurrence)
+        
+        return created_occurrences
+
+
+async def generate_occurrences_for_household(
+    pool: asyncpg.Pool,
+    household_id: UUID,
+    days_ahead: int = 30
+) -> List[Dict[str, Any]]:
+    """
+    Générer les occurrences pour toutes les tâches d'un ménage.
+    
+    Args:
+        pool: Pool de connexions
+        household_id: ID du ménage
+        days_ahead: Nombre de jours à générer dans le futur
+    
+    Returns:
+        Liste de toutes les occurrences créées
+    """
+    start_date = date.today()
+    end_date = start_date + timedelta(days=days_ahead)
+    
+    # Récupérer toutes les définitions actives du ménage
+    task_defs = await get_task_definitions(pool, household_id=household_id)
+    
+    all_occurrences = []
+    
+    for task_def in task_defs:
+        occurrences = await generate_occurrences_for_definition(
+            pool, task_def['id'], start_date, end_date
+        )
+        all_occurrences.extend(occurrences)
+    
+    return all_occurrences
+
+
+async def check_and_update_overdue_occurrences(
+    pool: asyncpg.Pool,
+    household_id: Optional[UUID] = None
+) -> int:
+    """
+    Vérifier et mettre à jour les occurrences en retard.
+    
+    Args:
+        pool: Pool de connexions
+        household_id: Limiter à un ménage spécifique
+    
+    Returns:
+        Nombre d'occurrences mises à jour
+    """
+    async with pool.acquire() as conn:
+        query = """
+            UPDATE task_occurrences o
+            SET status = $1
+            FROM task_definitions td
+            WHERE o.task_id = td.id
+              AND o.status = $2
+              AND o.due_at < NOW()
+        """
+        params = [TaskStatus.OVERDUE.value, TaskStatus.PENDING.value]
+        
+        if household_id:
+            query += " AND td.household_id = $3"
+            params.append(household_id)
+        
+        result = await conn.execute(query, *params)
+        
+        # Extraire le nombre de lignes mises à jour
+        count = int(result.split()[-1]) if result else 0
+        return count
+
+
+# ============================================================================
+# FONCTIONS EXISTANTES (Households, Members, Rooms)
+# ============================================================================
+
+async def create_household(
+    pool: asyncpg.Pool, 
+    name: str, 
+    created_by_user_id: Optional[UUID] = None
+) -> Dict[str, Any]:
+    """Créer un nouveau ménage"""
+    async with pool.acquire() as conn:
         household_id = await conn.fetchval(
             """
             INSERT INTO households (name, created_at) 
@@ -42,9 +644,7 @@ async def create_household(
             name,
         )
 
-        # Si l'ID de l'utilisateur est fourni, vérifier qu'il existe et l'ajouter comme membre du ménage
         if created_by_user_id:
-            # Vérifier que l'utilisateur existe
             user_exists = await conn.fetchval(
                 "SELECT 1 FROM users WHERE id = $1",
                 created_by_user_id
@@ -60,7 +660,6 @@ async def create_household(
                     created_by_user_id,
                 )
 
-        # Récupérer les données complètes du ménage
         household_data = await conn.fetchrow(
             """
             SELECT id, name, created_at
@@ -70,26 +669,16 @@ async def create_household(
             household_id,
         )
 
-        # Convertir le record en dictionnaire
         return dict(household_data)
 
 
 async def get_households(
-    pool: asyncpg.Pool, user_id: Optional[UUID] = None
+    pool: asyncpg.Pool, 
+    user_id: Optional[UUID] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Récupérer la liste des ménages, filtré par user_id si fourni.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        user_id: ID de l'utilisateur pour filtrer ses ménages (optionnel)
-
-    Returns:
-        Une liste de dictionnaires contenant les données des ménages
-    """
+    """Récupérer la liste des ménages"""
     async with pool.acquire() as conn:
         if user_id:
-            # Récupérer les ménages de l'utilisateur
             households = await conn.fetch(
                 """
                 SELECT h.id, h.name, h.created_at
@@ -101,7 +690,6 @@ async def get_households(
                 user_id,
             )
         else:
-            # Récupérer tous les ménages
             households = await conn.fetch(
                 """
                 SELECT id, name, created_at
@@ -110,27 +698,18 @@ async def get_households(
                 """
             )
 
-        # Convertir les records en dictionnaires
         return [dict(household) for household in households]
 
 
 async def get_household_members(
-    pool: asyncpg.Pool, household_id: UUID
+    pool: asyncpg.Pool, 
+    household_id: UUID
 ) -> List[Dict[str, Any]]:
-    """
-    Récupérer la liste des membres d'un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-
-    Returns:
-        Une liste de dictionnaires contenant les données des membres
-    """
+    """Récupérer la liste des membres d'un ménage"""
     async with pool.acquire() as conn:
         members = await conn.fetch(
             """
-            SELECT id, household_id, user_id, role
+            SELECT id, household_id, user_id, role, joined_at
             FROM household_members
             WHERE household_id = $1
             ORDER BY role
@@ -142,23 +721,15 @@ async def get_household_members(
 
 
 async def get_household_member(
-    pool: asyncpg.Pool, household_id: UUID, member_id: UUID
+    pool: asyncpg.Pool, 
+    household_id: UUID, 
+    member_id: UUID
 ) -> Optional[Dict[str, Any]]:
-    """
-    Récupérer les détails d'un membre spécifique d'un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-        member_id: ID du membre
-
-    Returns:
-        Un dictionnaire contenant les données du membre ou None si non trouvé
-    """
+    """Récupérer un membre spécifique"""
     async with pool.acquire() as conn:
         member = await conn.fetchrow(
             """
-            SELECT id, household_id, user_id, role
+            SELECT id, household_id, user_id, role, joined_at
             FROM household_members
             WHERE household_id = $1 AND id = $2
             """,
@@ -170,22 +741,13 @@ async def get_household_member(
 
 
 async def create_household_member(
-    pool: asyncpg.Pool, household_id: UUID, user_id: UUID, role: str = "member"
+    pool: asyncpg.Pool, 
+    household_id: UUID, 
+    user_id: UUID, 
+    role: str = "member"
 ) -> Dict[str, Any]:
-    """
-    Ajouter un membre à un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-        user_id: ID de l'utilisateur à ajouter
-        role: Rôle du membre (admin, member, guest)
-
-    Returns:
-        Un dictionnaire contenant les données du membre créé
-    """
+    """Ajouter un membre à un ménage"""
     async with pool.acquire() as conn:
-        # Vérifier si le membre existe déjà
         existing_member = await conn.fetchval(
             """
             SELECT id
@@ -199,11 +761,10 @@ async def create_household_member(
         if existing_member:
             raise ValueError("Cet utilisateur est déjà membre de ce ménage")
 
-        # Ajouter le membre au ménage
         member_id = await conn.fetchval(
             """
-            INSERT INTO household_members (household_id, user_id, role)
-            VALUES ($1, $2, $3)
+            INSERT INTO household_members (household_id, user_id, role, joined_at)
+            VALUES ($1, $2, $3, NOW())
             RETURNING id
             """,
             household_id,
@@ -211,10 +772,9 @@ async def create_household_member(
             role,
         )
 
-        # Récupérer les données complètes du membre
         member_data = await conn.fetchrow(
             """
-            SELECT id, household_id, user_id, role
+            SELECT id, household_id, user_id, role, joined_at
             FROM household_members
             WHERE id = $1
             """,
@@ -225,22 +785,13 @@ async def create_household_member(
 
 
 async def update_household_member(
-    pool: asyncpg.Pool, household_id: UUID, member_id: UUID, role: str
+    pool: asyncpg.Pool, 
+    household_id: UUID, 
+    member_id: UUID, 
+    role: str
 ) -> Dict[str, Any]:
-    """
-    Mettre à jour le rôle d'un membre d'un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-        member_id: ID du membre
-        role: Nouveau rôle du membre (admin, member, guest)
-
-    Returns:
-        Un dictionnaire contenant les données du membre mis à jour
-    """
+    """Mettre à jour le rôle d'un membre"""
     async with pool.acquire() as conn:
-        # Vérifier que le membre existe dans ce ménage
         existing_member = await conn.fetchval(
             """
             SELECT id
@@ -254,7 +805,6 @@ async def update_household_member(
         if not existing_member:
             raise ValueError("Ce membre n'existe pas dans ce ménage")
 
-        # Mettre à jour le rôle du membre
         await conn.execute(
             """
             UPDATE household_members
@@ -266,10 +816,9 @@ async def update_household_member(
             member_id,
         )
 
-        # Récupérer les données complètes du membre mis à jour
         member_data = await conn.fetchrow(
             """
-            SELECT id, household_id, user_id, role
+            SELECT id, household_id, user_id, role, joined_at
             FROM household_members
             WHERE id = $1
             """,
@@ -280,21 +829,12 @@ async def update_household_member(
 
 
 async def delete_household_member(
-    pool: asyncpg.Pool, household_id: UUID, member_id: UUID
+    pool: asyncpg.Pool, 
+    household_id: UUID, 
+    member_id: UUID
 ) -> bool:
-    """
-    Supprimer un membre d'un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-        member_id: ID du membre
-
-    Returns:
-        True si le membre a été supprimé, False sinon
-    """
+    """Supprimer un membre d'un ménage"""
     async with pool.acquire() as conn:
-        # Vérifier que le membre existe dans ce ménage avant suppression
         existing_member = await conn.fetchval(
             """
             SELECT id
@@ -308,7 +848,6 @@ async def delete_household_member(
         if not existing_member:
             return False
 
-        # Supprimer le membre
         rows_deleted = await conn.execute(
             """
             DELETE FROM household_members
@@ -318,21 +857,14 @@ async def delete_household_member(
             member_id,
         )
 
-        # Vérifier qu'une ligne a été supprimée
         return "DELETE 1" in rows_deleted
 
 
-async def get_rooms(pool: asyncpg.Pool, household_id: UUID) -> List[Dict[str, Any]]:
-    """
-    Récupérer la liste des pièces d'un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-
-    Returns:
-        Une liste de dictionnaires contenant les données des pièces
-    """
+async def get_rooms(
+    pool: asyncpg.Pool, 
+    household_id: UUID
+) -> List[Dict[str, Any]]:
+    """Récupérer la liste des pièces d'un ménage"""
     async with pool.acquire() as conn:
         rooms = await conn.fetch(
             """
@@ -347,17 +879,11 @@ async def get_rooms(pool: asyncpg.Pool, household_id: UUID) -> List[Dict[str, An
         return [dict(room) for room in rooms]
 
 
-async def get_room(pool: asyncpg.Pool, room_id: UUID) -> Optional[Dict[str, Any]]:
-    """
-    Récupérer les détails d'une pièce spécifique.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        room_id: ID de la pièce
-
-    Returns:
-        Un dictionnaire contenant les données de la pièce ou None si non trouvée
-    """
+async def get_room(
+    pool: asyncpg.Pool, 
+    room_id: UUID
+) -> Optional[Dict[str, Any]]:
+    """Récupérer une pièce spécifique"""
     async with pool.acquire() as conn:
         room = await conn.fetchrow(
             """
@@ -372,20 +898,12 @@ async def get_room(pool: asyncpg.Pool, room_id: UUID) -> Optional[Dict[str, Any]
 
 
 async def create_room(
-    pool: asyncpg.Pool, name: str, household_id: UUID, icon: Optional[str] = None
+    pool: asyncpg.Pool, 
+    name: str, 
+    household_id: UUID, 
+    icon: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Créer une nouvelle pièce dans un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        name: Nom de la pièce
-        household_id: ID du ménage
-        icon: Icône de la pièce (optionnel)
-
-    Returns:
-        Un dictionnaire contenant les données de la pièce créée
-    """
+    """Créer une nouvelle pièce"""
     async with pool.acquire() as conn:
         room_id = await conn.fetchval(
             """
@@ -408,118 +926,3 @@ async def create_room(
         )
 
         return dict(room_data)
-
-
-async def get_tasks(pool: asyncpg.Pool, household_id: UUID) -> List[Dict[str, Any]]:
-    """
-    Récupérer la liste des tâches d'un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        household_id: ID du ménage
-
-    Returns:
-        Une liste de dictionnaires contenant les données des tâches
-    """
-    async with pool.acquire() as conn:
-        tasks = await conn.fetch(
-            """
-            SELECT id, title, description, household_id, due_date, completed
-            FROM tasks
-            WHERE household_id = $1
-            ORDER BY due_date
-            """,
-            household_id,
-        )
-
-        # Convertir les datetime en date si nécessaire
-        result = []
-        for task in tasks:
-            task_dict = dict(task)
-            if task_dict["due_date"] and hasattr(task_dict["due_date"], "date"):
-                task_dict["due_date"] = task_dict["due_date"].date()
-            result.append(task_dict)
-        
-        return result
-
-
-async def get_task(pool: asyncpg.Pool, task_id: UUID) -> Optional[Dict[str, Any]]:
-    """
-    Récupérer les détails d'une tâche spécifique.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        task_id: ID de la tâche
-
-    Returns:
-        Un dictionnaire contenant les données de la tâche ou None si non trouvée
-    """
-    async with pool.acquire() as conn:
-        task = await conn.fetchrow(
-            """
-            SELECT id, title, description, household_id, due_date, completed
-            FROM tasks
-            WHERE id = $1
-            """,
-            task_id,
-        )
-
-        if not task:
-            return None
-            
-        # Convertir due_date de datetime à date si nécessaire
-        result = dict(task)
-        if result["due_date"] and hasattr(result["due_date"], "date"):
-            result["due_date"] = result["due_date"].date()
-        
-        return result
-
-
-async def create_task(
-    pool: asyncpg.Pool,
-    title: str,
-    household_id: UUID,
-    description: Optional[str] = None,
-    due_date: Optional[date] = None,
-) -> Dict[str, Any]:
-    """
-    Créer une nouvelle tâche dans un ménage.
-
-    Args:
-        pool: Pool de connexions à la base de données
-        title: Titre de la tâche
-        household_id: ID du ménage
-        description: Description de la tâche (optionnel)
-        due_date: Date d'échéance de la tâche (optionnel)
-
-    Returns:
-        Un dictionnaire contenant les données de la tâche créée
-    """
-    async with pool.acquire() as conn:
-        task_id = await conn.fetchval(
-            """
-            INSERT INTO tasks (title, description, household_id, due_date, completed)
-            VALUES ($1, $2, $3, $4, false)
-            RETURNING id
-            """,
-            title,
-            description,
-            household_id,
-            due_date,
-        )
-
-        task_data = await conn.fetchrow(
-            """
-            SELECT id, title, description, household_id, due_date, completed
-            FROM tasks
-            WHERE id = $1
-            """,
-            task_id,
-        )
-
-        # Convertir due_date de datetime à date si nécessaire
-        result = dict(task_data)
-        if result["due_date"] and hasattr(result["due_date"], "date"):
-            result["due_date"] = result["due_date"].date()
-        
-        return result
