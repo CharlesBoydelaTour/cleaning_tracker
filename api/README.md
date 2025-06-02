@@ -1,153 +1,644 @@
-# Cleaning Tracker — API
+# Cleaning Tracker API
 
-Back-end service for the **Cleaning Tracker** application.
-Built with **FastAPI**, **PostgreSQL (Supabase)**, and **uv** for lightning-fast dependency management.
-It exposes a JSON/REST interface consumed by the React Native + Expo front-end and drives scheduled jobs (Celery / Edge Functions) that create recurring task occurrences and dispatch push / email reminders.
+API REST pour l'application Cleaning Tracker, construite avec FastAPI et PostgreSQL.
 
----
+## 📋 Table des matières
 
-## 🏗 Project structure
+1. [Architecture](#architecture)
+2. [Installation](#installation)
+3. [Configuration](#configuration)
+4. [Structure du projet](#structure-du-projet)
+5. [Authentification](#authentification)
+6. [Endpoints API](#endpoints-api)
+7. [Modèles de données](#modèles-de-données)
+8. [Système de récurrence](#système-de-récurrence)
+9. [Jobs asynchrones](#jobs-asynchrones)
+10. [Gestion des erreurs](#gestion-des-erreurs)
+11. [Tests](#tests)
+12. [Déploiement](#déploiement)
 
-```markdown
-api/
-├── .env.example            # template for local secrets
-├── pyproject.toml          # dependencies (managed by uv)
-├── uv.lock                 # deterministic lockfile
-└── app/
-    ├── __init__.py
-    ├── main.py             # FastAPI instance & router mounting
-    ├── config.py           # Pydantic BaseSettings
-    ├── core/
-    │   ├── database.py     # asyncpg connection pool helpers
-    │   ├── security.py     # JWT / password hashing
-    │   └── celery_app.py   # Celery factory
-    ├── routers/            # HTTP endpoints
-    │   ├── auth.py
-    │   ├── households.py
-    │   ├── tasks.py
-    │   └── occurrences.py
-    ├── schemas/            # Pydantic request / response models
-    ├── services/           # domain logic (recurrence engine, notifications)
-    ├── worker/             # background jobs → celery tasks
-    └── tests/              # pytest & httpx-async test suites
+## 🏗️ Architecture
+
+L'API suit une architecture en couches :
+
+```
+┌─────────────────┐
+│   Routes/API    │  ← FastAPI endpoints
+├─────────────────┤
+│    Services     │  ← Logique métier
+├─────────────────┤
+│    Database     │  ← Accès données (asyncpg)
+├─────────────────┤
+│   PostgreSQL    │  ← Stockage + RLS
+└─────────────────┘
 ```
 
----
+### Composants clés
 
-## 🧰 Tech stack
+- **FastAPI** : Framework web async haute performance
+- **Pydantic** : Validation et sérialisation des données
+- **asyncpg** : Driver PostgreSQL asynchrone
+- **Celery** : Traitement des tâches asynchrones
+- **Redis** : Broker pour Celery et cache
 
-| Purpose            | Library / Tool                                          |
-| ------------------ | ------------------------------------------------------- |
-| Web framework      | **FastAPI 0.111+**                                      |
-| Async DB access    | **asyncpg**, **Supabase Python client**                 |
-| Object validation  | **Pydantic v2**                                         |
-| Background jobs    | **Celery 6** (or Supabase **Edge Functions** in Python) |
-| Schedules / cron   | **APScheduler 4** or **Celery beat**                    |
-| Task queues        | **Redis** (local) • **Cloud Run Jobs** (prod)           |
-| Dependency manager | **uv**                                                  |
-| Tests              | **pytest** • **pytest-asyncio** • **httpx**             |
-| Lint & style       | **ruff** • **black**                                    |
-| CI / CD            | **GitHub Actions** + `supabase db push` + Dockerfile    |
+## 🚀 Installation
 
----
+### Prérequis
 
-## 🚀 Quick-start
+- Python 3.12+
+- PostgreSQL 16+ (ou Supabase)
+- Redis
+- uv (gestionnaire de packages Python)
 
-### 1 · Clone & install
+### Installation locale
 
 ```bash
-git clone https://github.com/your-org/cleaning-tracker.git
+# 1. Cloner et naviguer
 cd cleaning-tracker/api
 
-# install uv once (Linux / macOS)
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 2. Installer les dépendances avec uv
+uv sync
 
-uv sync        # creates .venv and installs deps pinned in uv.lock
+# 3. Configurer l'environnement
+cp .env.example .env.dev
+# Éditer .env.dev avec vos valeurs
+
+# 4. Lancer les migrations Supabase
+supabase db reset
+
+# 5. Démarrer l'API
+make dev
+# ou directement : uv run uvicorn app.main:app --reload
 ```
 
-### 2 · Configure secrets
+### Installation Docker
 
 ```bash
-cp .env.example .env        # then fill in SUPABASE_URL, SERVICE_ROLE_KEY, etc.
+# Développement avec hot-reload
+make staging
+
+# Production
+make prod
 ```
 
-### 3 · Run the API locally
+## ⚙️ Configuration
+
+### Variables d'environnement
+
+L'API utilise différents fichiers `.env` selon l'environnement :
+
+- `.env.dev` : Développement local
+- `.env.staging` : Test avec Docker
+- `.env.prod` : Production
+
+Variables principales :
 
 ```bash
-uv run uvicorn app.main:app --reload --port 8000
+# Base de données
+DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname
+
+# Supabase
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=xxx
+SERVICE_ROLE_KEY=xxx  # Pour les opérations admin
+
+# Sécurité
+SECRET_KEY=xxx  # Pour JWT, générer avec: openssl rand -hex 32
+
+# Redis (Celery)
+REDIS_URL=redis://localhost:6379/0
+
+# Email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-email@gmail.com
+SMTP_PASSWORD=app-specific-password
+
+# Application
+APP_URL=https://yourdomain.com
+ENVIRONMENT=development
+LOG_LEVEL=INFO
+LOG_FORMAT=json  # ou "text" pour dev
 ```
 
-API docs are available at [http://localhost:8000/docs](http://localhost:8000/docs) (Swagger) and `/redoc`.
+### Configuration du logging
 
-### 4 · Unit tests
+Le système de logging est configurable via `app/core/logging/` :
+
+```python
+# Niveaux : DEBUG, INFO, WARNING, ERROR, CRITICAL
+# Formats : json (production), text avec couleurs (dev)
+# Destinations : console, fichier rotatif
+```
+
+## 📁 Structure du projet
+
+```
+api/
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # Point d'entrée FastAPI
+│   ├── config.py            # Configuration Pydantic
+│   │
+│   ├── core/               # Fonctionnalités transverses
+│   │   ├── database.py     # Pool asyncpg et helpers
+│   │   ├── security.py     # JWT, hashing passwords
+│   │   ├── exceptions.py   # Exceptions personnalisées
+│   │   ├── celery_app.py   # Configuration Celery
+│   │   └── logging/        # Système de logging
+│   │
+│   ├── routers/            # Endpoints API
+│   │   ├── auth.py         # /auth/*
+│   │   ├── households.py   # /households/*
+│   │   ├── members.py      # /households/{id}/members/*
+│   │   ├── rooms.py        # /households/{id}/rooms/*
+│   │   ├── task_definitions.py  # /catalog, /households/{id}/task-definitions/*
+│   │   ├── task_occurrences.py  # /occurrences/*, /households/{id}/occurrences/*
+│   │   └── notification_preferences.py  # /users/{id}/notification-preferences/*
+│   │
+│   ├── schemas/            # Modèles Pydantic
+│   │   ├── auth.py
+│   │   ├── household.py
+│   │   ├── member.py
+│   │   ├── room.py
+│   │   └── task.py
+│   │
+│   ├── services/           # Logique métier
+│   │   ├── auth_service.py
+│   │   ├── recurrence.py   # Moteur RRULE
+│   │   └── notification_service.py
+│   │
+│   ├── worker/             # Jobs Celery
+│   │   └── tasks.py
+│   │
+│   └── test/              # Tests
+│       ├── conftest.py    # Fixtures pytest
+│       └── test_*.py
+│
+├── scripts/               # Scripts utilitaires
+├── supabase/             # Migrations SQL
+└── docker/               # Dockerfiles
+```
+
+## 🔐 Authentification
+
+### Flux d'authentification
+
+1. **Inscription** : `/auth/signup`
+   ```json
+   POST {
+     "email": "user@example.com",
+     "password": "SecurePass123!",
+     "full_name": "John Doe"
+   }
+   ```
+
+2. **Connexion** : `/auth/login`
+   ```json
+   POST {
+     "email": "user@example.com",
+     "password": "SecurePass123!"
+   }
+   
+   Response: {
+     "user": {...},
+     "tokens": {
+       "access_token": "eyJ...",
+       "refresh_token": "eyJ...",
+       "token_type": "bearer"
+     }
+   }
+   ```
+
+3. **Utilisation du token** :
+   ```
+   Authorization: Bearer eyJ...
+   ```
+
+### Sécurité
+
+- Mots de passe hashés avec bcrypt
+- Tokens JWT avec expiration configurable
+- Refresh tokens pour renouvellement
+- Protection CORS configurée
+
+## 📡 Endpoints API
+
+### Documentation interactive
+
+- **Swagger UI** : http://localhost:8000/docs
+- **ReDoc** : http://localhost:8000/redoc
+
+### Endpoints principaux
+
+#### Auth - `/auth/*`
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| POST | `/auth/signup` | Créer un compte |
+| POST | `/auth/login` | Se connecter |
+| POST | `/auth/refresh` | Renouveler le token |
+| POST | `/auth/logout` | Se déconnecter |
+| GET | `/auth/me` | Profil utilisateur |
+| DELETE | `/auth/me` | Supprimer compte |
+
+#### Households - `/households/*`
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/households/` | Liste des foyers |
+| POST | `/households/` | Créer un foyer |
+| GET | `/households/{id}` | Détails d'un foyer |
+
+#### Members - `/households/{household_id}/members/*`
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/members/` | Liste des membres |
+| POST | `/members/` | Ajouter un membre |
+| PUT | `/members/{id}` | Modifier le rôle |
+| DELETE | `/members/{id}` | Retirer un membre |
+
+#### Rooms - `/households/{household_id}/rooms/*`
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/rooms/` | Liste des pièces |
+| POST | `/rooms/` | Créer une pièce |
+| GET | `/rooms/{id}` | Détails d'une pièce |
+
+#### Task Definitions
+
+**Catalogue global** :
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/catalog` | Tâches prédéfinies |
+
+**Tâches du foyer** :
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/households/{id}/task-definitions/` | Liste des tâches |
+| POST | `/households/{id}/task-definitions/` | Créer une tâche |
+| PUT | `/households/{id}/task-definitions/{task_id}` | Modifier |
+| DELETE | `/households/{id}/task-definitions/{task_id}` | Supprimer |
+| POST | `/households/{id}/task-definitions/{catalog_id}/copy` | Copier du catalogue |
+
+#### Task Occurrences
+
+**Actions sur les occurrences** :
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/occurrences/{id}` | Détails occurrence |
+| PUT | `/occurrences/{id}/complete` | Marquer complétée |
+| PUT | `/occurrences/{id}/snooze` | Reporter |
+| PUT | `/occurrences/{id}/skip` | Ignorer |
+| PUT | `/occurrences/{id}/assign` | Assigner |
+
+**Gestion du foyer** :
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| GET | `/households/{id}/occurrences/` | Calendrier |
+| POST | `/households/{id}/occurrences/generate` | Générer |
+| GET | `/households/{id}/occurrences/stats` | Statistiques |
+
+### Exemples d'utilisation
+
+#### Créer une tâche récurrente
 
 ```bash
-uv run pytest -q
+curl -X POST http://localhost:8000/households/{household_id}/task-definitions/ \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Nettoyer la cuisine",
+    "description": "Plan de travail + évier + sol",
+    "recurrence_rule": "FREQ=WEEKLY;BYDAY=MO,FR",
+    "estimated_minutes": 30,
+    "room_id": "{room_id}"
+  }'
 ```
 
----
+#### Compléter une tâche
 
-## ⚙️ Database workflow
+```bash
+curl -X PUT http://localhost:8000/occurrences/{occurrence_id}/complete \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "duration_minutes": 25,
+    "comment": "Utilisé le nouveau produit nettoyant",
+    "photo_url": "https://..."
+  }'
+```
 
-| Action                            | Command                                |
-| --------------------------------- | -------------------------------------- |
-| Create a new migration            | `supabase migration new <name>`        |
-| Apply migrations locally          | `supabase db reset`                    |
-| Push migrations to Supabase cloud | `supabase db push --remote production` |
+## 🗃️ Modèles de données
 
-> **Tip**: keep the database schema **source-controlled** under `supabase/migrations/`.
+### Schemas Pydantic principaux
 
----
+#### TaskDefinitionCreate
+```python
+{
+  "title": str,                    # Requis
+  "description": str | None,
+  "recurrence_rule": str,          # Format RRULE
+  "estimated_minutes": int | None,
+  "room_id": UUID | None,
+  "household_id": UUID | None,     # None = catalogue
+  "is_catalog": bool = False
+}
+```
 
-## 🔄 Background services
+#### TaskOccurrence
+```python
+{
+  "id": UUID,
+  "task_id": UUID,
+  "scheduled_date": date,
+  "due_at": datetime,
+  "status": "pending" | "snoozed" | "done" | "skipped" | "overdue",
+  "assigned_to": UUID | None,
+  "snoozed_until": datetime | None,
+  "created_at": datetime
+}
+```
 
-| Service       | Local start command                          |
-| ------------- | -------------------------------------------- |
-| Celery worker | `uv run celery -A app.worker worker -l info` |
-| Celery beat   | `uv run celery -A app.worker beat  -l info`  |
+### Validation des données
 
----
+Pydantic assure la validation automatique :
 
-## 🌐 Environment variables (excerpt)
+- Emails valides
+- UUIDs corrects
+- Enums respectées
+- Dates futures pour les reports
+- Cohérence des champs liés
 
-| Key                 | Sample value                        | Purpose                                  |
-| ------------------- | ----------------------------------- | ---------------------------------------- |
-| `SUPABASE_URL`      | `https://xyzcompany.supabase.co`    | PostgREST API & auth                     |
-| `SERVICE_ROLE_KEY`  | `eyJhbGci...`                       | Supabase service JWT (server-side calls) |
-| `DATABASE_URL`      | `postgresql+asyncpg://postgres:...` | direct Postgres access                   |
-| `REDIS_URL`         | `redis://localhost:6379/0`          | Celery broker / result backend           |
-| `EXPO_ACCESS_TOKEN` | *token*                             | to send push notifications               |
+## 🔄 Système de récurrence
 
-See **.env.example** for the full list.
+### Format RRULE
 
----
+L'API utilise le standard RFC 5545 (iCalendar) pour les récurrences.
 
-## 📌 MVP Sprint 1 — API TODO (checklist)
+#### Exemples courants
 
-* [x] **Bootstraper le dossier `api/`** avec uv & FastAPI
-* [x] **Connexion Supabase / Postgres** et helpers `database.py`
-* [ ] **Endpoints Auth** (`/auth/signup`, `/auth/login`, `/auth/refresh`)
-* [ ] **Routes households** (create / join)
-* [ ] **CRUD Catalogue & Tâches personnalisées** (`/tasks`, `/catalog`)
-* [ ] **Service de récurrence** : RRULE ➜ `task_occurrences`
-* [ ] **Endpoint Snooze** (`/occurrences/{id}/snooze`)
-* [ ] **Notifications service** (Expo push, Resend email template)
-* [ ] **Schema‐based unit tests** + E2E flow (httpx)
-* [ ] **GitHub Actions pipeline**: lint → tests → db push → build Docker image
+```python
+# Quotidien
+"FREQ=DAILY"
 
----
+# Tous les 2 jours
+"FREQ=DAILY;INTERVAL=2"
 
-## 🤝 Contributing
+# Jours de semaine uniquement
+"FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR"
 
-1. Fork → create branch (`feat/my-feature`).
-2. `uv sync` then code & add tests.
-3. Ensure `ruff` & `black` pass (`uv run ruff check .`).
-4. PR, wait for CI to be green, request review.
+# Hebdomadaire le lundi
+"FREQ=WEEKLY;BYDAY=MO"
 
----
+# Toutes les 2 semaines, lundi et vendredi
+"FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,FR"
 
-## 📝 License
+# Mensuel le 15
+"FREQ=MONTHLY;BYMONTHDAY=15"
 
-MIT — see `LICENSE` in the monorepo root.
+# Dernier jour du mois
+"FREQ=MONTHLY;BYMONTHDAY=-1"
 
-Happy cleaning & coding !
+# Trimestriel (tous les 3 mois)
+"FREQ=MONTHLY;INTERVAL=3"
+
+# Annuel le 1er janvier
+"FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1"
+
+# Avec limite de 10 occurrences
+"FREQ=DAILY;COUNT=10"
+
+# Jusqu'au 31/12/2024
+"FREQ=WEEKLY;UNTIL=20241231"
+```
+
+### Service RecurrenceService
+
+Le service `app.services.recurrence` offre :
+
+- **Validation** : `validate_rrule(rule)` → RecurrenceInfo
+- **Génération** : `calculate_next_occurrences(rule, start, count)`
+- **Description** : `describe_rrule(rule)` → "Tous les lundis et vendredis"
+- **Presets** : `get_preset_rule("weekly_monday")` → "FREQ=WEEKLY;BYDAY=MO"
+
+### Limites de sécurité
+
+- Max 366 occurrences par an
+- Génération limitée à 90 jours
+- Pas de récurrence plus fréquente que quotidienne
+
+## ⚡ Jobs asynchrones
+
+### Architecture Celery
+
+```
+┌──────────┐     ┌─────────┐     ┌────────┐
+│   Beat   │────▶│  Redis  │◀────│ Worker │
+└──────────┘     └─────────┘     └────────┘
+     │                                 │
+     └─── Planifie ──┐    ┌── Execute ─┘
+                     ▼    ▼
+                  ┌─────────┐
+                  │   DB    │
+                  └─────────┘
+```
+
+### Tâches planifiées
+
+| Tâche | Fréquence | Description |
+|-------|-----------|-------------|
+| `send_daily_reminders` | 8h00 quotidien | Résumé du jour |
+| `process_notification_queue` | Toutes les 5 min | Envoi des rappels |
+| `check_overdue_tasks` | Toutes les heures | Marquer les retards |
+| `generate_occurrences` | 2h00 quotidien | Créer occurrences J+30 |
+
+### Lancer les workers
+
+```bash
+# Worker
+make dev-worker
+# ou : celery -A app.core.celery_app worker --loglevel=info
+
+# Beat (planificateur)
+celery -A app.core.celery_app beat --loglevel=info
+
+# Monitoring
+celery -A app.core.celery_app flower
+```
+
+## 🚨 Gestion des erreurs
+
+### Exceptions personnalisées
+
+L'API utilise des exceptions structurées (`app.core.exceptions`) :
+
+```python
+# Business
+HouseholdNotFound(household_id)      # 404
+TaskNotFound(task_id)                 # 404
+UnauthorizedAccess(resource, action)  # 403
+BusinessRuleViolation(rule, details)  # 409
+
+# Validation
+InvalidInput(field, value, reason)    # 400
+MissingRequiredField(field)          # 400
+
+# Technique
+DatabaseError(operation, details)     # 500
+ExternalServiceError(service, error)  # 503
+```
+
+### Format de réponse d'erreur
+
+```json
+{
+  "error": {
+    "code": "HOUSEHOLD_NOT_FOUND",
+    "message": "Le ménage avec l'ID xxx n'existe pas",
+    "severity": "medium",
+    "metadata": {
+      "household_id": "xxx"
+    }
+  }
+}
+```
+
+### Logging structuré
+
+Tous les événements sont loggés avec contexte :
+
+```python
+logger.info(
+    "Tâche complétée",
+    extra=with_context(
+        occurrence_id=str(occurrence_id),
+        user_id=user_id,
+        duration=25
+    )
+)
+```
+
+## 🧪 Tests
+
+### Structure des tests
+
+```
+test/
+├── conftest.py         # Fixtures partagées
+├── test_auth_*.py      # Tests auth
+├── test_households.py  # Tests foyers
+├── test_tasks_*.py     # Tests tâches
+└── test_integration.py # Tests E2E
+```
+
+### Lancer les tests
+
+```bash
+# Tous les tests
+make test
+
+# Tests rapides seulement
+make test-fast
+
+# Avec couverture
+make test-coverage
+
+# Un fichier spécifique
+uv run pytest app/test/test_auth_unit.py -v
+```
+
+### Fixtures principales
+
+- `db_pool` : Pool de connexions test
+- `async_client` : Client HTTP de test
+- `auth_headers` : Headers avec token valide
+- `mock_user` : Utilisateur de test
+- `test_household_with_user` : Foyer avec admin
+
+### Exemple de test
+
+```python
+async def test_create_task(
+    async_client: AsyncClient,
+    test_household_with_user,
+    auth_headers: dict
+):
+    household = test_household_with_user["household"]
+    
+    response = await async_client.post(
+        f"/households/{household['id']}/task-definitions/",
+        json={
+            "title": "Test Task",
+            "recurrence_rule": "FREQ=DAILY"
+        },
+        headers=auth_headers
+    )
+    
+    assert response.status_code == 201
+    assert response.json()["title"] == "Test Task"
+```
+
+## 🚢 Déploiement
+
+### Docker
+
+```dockerfile
+# Build multi-stage optimisé
+FROM python:3.13-slim AS builder
+# ... installation des dépendances avec uv
+
+FROM python:3.13-slim
+# ... copie du venv et run
+```
+
+### Docker Compose
+
+Trois configurations disponibles :
+
+1. **Développement** : `docker-compose.dev.yml`
+   - Hot reload
+   - Redis Commander
+   - Volumes montés
+
+2. **Staging** : `docker-compose.yml --env-file .env.staging`
+   - Proche de la prod
+   - Logs JSON
+
+3. **Production** : `docker-compose.yml --env-file .env.prod`
+   - Multi-workers
+   - Healthchecks
+   - Restart policies
+
+### Monitoring
+
+- Logs structurés en JSON
+- Métriques Prometheus (à venir)
+- Healthchecks sur `/health`
+- Sentry pour les erreurs (à configurer)
+
+## 📚 Ressources
+
+- [FastAPI Documentation](https://fastapi.tiangolo.com)
+- [Pydantic V2 Guide](https://docs.pydantic.dev)
+- [RRULE Specification](https://icalendar.org/iCalendar-RFC-5545/3-8-5-3-recurrence-rule.html)
+- [Celery Best Practices](https://docs.celeryproject.org/en/stable/userguide/tasks.html)
+- [PostgreSQL RLS Guide](https://www.postgresql.org/docs/current/ddl-rowsecurity.html)
+
+## 🤝 Contribution
+
+1. Fork le projet
+2. Créer une branche (`git checkout -b feature/amazing`)
+3. Commiter (`git commit -m 'Add amazing feature'`)
+4. Pousser (`git push origin feature/amazing`)
+5. Ouvrir une Pull Request
+
+### Standards de code
+
+- Formatter : `make format` (ruff)
+- Linter : `make lint`
+- Type hints obligatoires
+- Docstrings pour les fonctions publiques
+- Tests pour toute nouvelle feature

@@ -1,218 +1,301 @@
 # Cleaning Tracker
 
-This repository hosts **Cleaning Tracker**, a cross-platform (iOS · Android · Web) application that helps households plan, schedule and track their chores through shared calendars, automatic reminders and actionable dashboards. It is built on a Python/PostgreSQL back end and a single React Native + Expo front end, with fully automated CI/CD pipelines and cloud-hosted infrastructure for painless scaling and zero-ops maintenance.
+**Une application collaborative de gestion des tâches ménagères avec rappels automatiques**
 
-## ✨ Features
+## 📋 Vue d'ensemble
 
-### MVP Sprint 1
+Cleaning Tracker est une application multi-plateforme (iOS, Android, Web) qui permet aux membres d'un foyer de planifier, suivre et accomplir leurs tâches ménagères de manière collaborative. L'application génère automatiquement un calendrier de tâches récurrentes et envoie des rappels personnalisés.
 
-* Email / password authentication and household creation
-* Chore catalogue with custom tasks
-* Recurrence engine generating calendar events
-* Day | Week | Month calendar views
-* Push / email reminders with “snooze” support
+### 🎯 Problème résolu
 
-### v1.1 Sprint 2
+- **Oublis fréquents** : Les tâches ménagères sont souvent oubliées ou reportées
+- **Répartition inégale** : Difficile de suivre qui fait quoi dans le foyer
+- **Manque de visibilité** : Pas de vue d'ensemble sur les tâches à venir
+- **Communication** : Besoin de rappeler constamment aux autres leurs tâches
 
-* Completion history & KPI dashboard
-* Member-level assignment and filtering
-* CSV / Excel exports
+### 💡 Solution
 
-### v1.2 Sprint 3
+Une application qui :
+- Génère automatiquement un calendrier de tâches basé sur des règles de récurrence
+- Envoie des rappels push et email personnalisés
+- Permet de suivre qui fait quoi et quand
+- Offre des statistiques sur la répartition des tâches
 
-* Task duplication & estimated duration
-* Comments + photo proof
-* Eco-friendly product sheets & DIY recipes
-
-## 🗺️ MVP Sprint 1 — TODO
-
-### 🛠️ Setup & BDD
-
-* [x] **Initialiser le projet Supabase** (création du project cloud, configuration `.env` locale)
-* [x] **Écrire & exécuter la migration `init_schema`** pour toutes les tables + RLS
-
-### 🛠️ API FastAPI
-
-* [ ] **Bootstraper le dossier `api/`** avec `uv init` (structure packages, virtualenv)
-* [ ] **Configurer `pydantic-settings`** pour charger les variables d’environnement (URL & clés Supabase, DSN Postgres)
-* [ ] **Mettre en place la connexion DB** (`asyncpg` pool + Supabase PostgREST client)
-* [ ] **Définir modèles Pydantic** : User, Household, Room, TaskDefinition, TaskOccurrence
-* [ ] **Middlewares FastAPI** : CORS, logging, gestion d’erreurs
-* [ ] **Intégrer l’auth Supabase** (vérification JWT / rôle `authenticated`, dépendance `get_current_user`)
-* [ ] **Endpoints Auth** (`/auth/signup`, `/auth/login`, `/auth/refresh`) + flux **création / rejoindre un foyer**
-* [ ] **Routes CRUD Catalogue & Tâches personnalisées** (`/tasks`, `/catalog`)
-* [ ] **Endpoints Occurrences & Snooze** (`/occurrences`, `/occurrences/{id}/snooze`)
-* [ ] **Documentation OpenAPI** (Swagger / ReDoc) générée automatiquement
-
-### 🔄 Récurrence & Notifications
-
-* [ ] **Service de récurrence** (Edge Function Python ou Celery beat) : RRULE → `task_occurrences`
-* [ ] **Rappels Push & Email** via Expo Push + template email Supabase / Resend + endpoint **snooze**
-* [ ] **Configurer Celery & broker Redis** + worker container
-
-### 🖼️ Front-end Expo
-
-* [ ] **Vue Calendrier** Day · Week · Month avec `react-native-calendars` (ou Tamagui Calendar)
-
-### ✅ Qualité & CI/CD
-
-* [ ] **Tests Unitaires & E2E** (Pytest pour l’API, Maestro pour l’app) couvrant le parcours MVP
-* [ ] **Pipeline CI GitHub Actions** : lint, tests, `supabase db push`, build Expo EAS preview
-
-
-
-## 🧰 Tech Stack
-
-| Layer              | Choice                             | Rationale                                                                       |
-| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------- |
-| **Database**       | PostgreSQL 16 + Row Level Security | Fine-grained multi-tenant access control ([PostgreSQL][1])                      |
-| **Backend**        | FastAPI (Python 3.12)              | Async, Pydantic-typed, background jobs out-of-the-box ([FastAPI][2])            |
-| **Scheduled Jobs** | Celery 6 + APScheduler 4           | Robust distributed workers ([GitHub][3], [apscheduler.readthedocs.io][4])       |
-| **BaaS**           | Supabase                           | Managed Postgres + Python Edge Functions ([Supabase][5], [Supabase][6])         |
-| **Frontend**       | React Native 0.78 + Expo SDK 53    | New Architecture (bridgeless) enabled by default ([React Native][7], [Expo][8]) |
-| **Build & OTA**    | Expo EAS Build                     | Cloud builds, over-the-air updates ([Expo Documentation][9])                    |
-| **Testing**        | Maestro flows + Pytest             | Unified mobile/web UI tests ([maestro.mobile.dev][10])                          |
-| **Monorepo**       | Turborepo                          | High-performance task graph caching ([Turborepo][11])                           |
-
-## 🏗️ Architecture Overview
+## 🏗️ Architecture technique
 
 ```mermaid
-graph TD
-  subgraph Client
-    RN[React Native + Expo App]
-    Web[PWA]
-  end
-  subgraph Backend
-    APISrv(FastAPI)
-    Worker[Celery&nbsp;/&nbsp;APScheduler]
-  end
-  DB[(PostgreSQL + RLS)]
-  Supa[Supabase Auth / Storage]
-  Push[Expo Push + FCM]
-
-  RN -->|HTTPS| APISrv
-  Web -->|HTTPS| APISrv
-  APISrv --> DB
-  APISrv --> Supa
-  Worker ---> DB
-  Worker --> Push
+graph TB
+    subgraph "Frontend"
+        Mobile[React Native/Expo]
+        Web[Web PWA]
+    end
+    
+    subgraph "Backend"
+        API[FastAPI Python]
+        Worker[Celery Workers]
+        Scheduler[Celery Beat]
+    end
+    
+    subgraph "Infrastructure"
+        DB[(PostgreSQL)]
+        Redis[(Redis)]
+        Storage[Supabase Storage]
+    end
+    
+    subgraph "Services externes"
+        Push[Expo Push]
+        Email[SMTP]
+    end
+    
+    Mobile --> API
+    Web --> API
+    API --> DB
+    API --> Redis
+    Worker --> DB
+    Worker --> Push
+    Worker --> Email
+    Scheduler --> Worker
 ```
 
-* **Edge Functions** (Supabase) are used for lightweight webhooks and cron fan-out. ([Supabase][5])
-* **Celery beats** create future occurrences; **APScheduler** handles ad-hoc snoozes inside the API container. ([GitHub][3], [apscheduler.readthedocs.io][4])
-* Push notifications are unified via Expo’s single endpoint, reaching iOS, Android and web browsers. ([Expo Documentation][9])
+### Stack technique
 
-## 🚀 Getting Started
+| Composant | Technologie | Justification |
+|-----------|------------|---------------|
+| **Frontend mobile** | React Native 0.78 + Expo SDK 53 | Cross-platform, OTA updates, écosystème riche |
+| **Backend API** | FastAPI (Python 3.12) | Performance async, validation Pydantic, docs auto |
+| **Base de données** | PostgreSQL 16 + RLS | Sécurité multi-tenant, robustesse |
+| **Jobs asynchrones** | Celery 6 + Redis | Scalabilité, fiabilité des tâches de fond |
+| **BaaS** | Supabase | Auth intégrée, storage, realtime (futur) |
+| **Notifications** | Expo Push + SMTP | Unification iOS/Android, emails transactionnels |
 
-### Prerequisites
+## 🚀 Fonctionnalités principales
 
-* **Node ≥ 20** and **pnpm** for the front end
-* **Python 3.12** + **UV** for the API
-* A free Supabase project (set the URL and anon key below)
+### 1. Gestion des ménages (Households)
+- **Création de foyer** : Chaque utilisateur peut créer un ou plusieurs foyers
+- **Invitation de membres** : Ajout par email avec différents rôles (admin, membre, invité)
+- **Multi-foyers** : Un utilisateur peut appartenir à plusieurs foyers
 
-### Clone & bootstrap
+### 2. Définition des tâches
+- **Catalogue prédéfini** : Bibliothèque de tâches courantes (nettoyer cuisine, passer aspirateur...)
+- **Tâches personnalisées** : Création de tâches spécifiques au foyer
+- **Règles de récurrence** : Support complet du format RRULE
+  - Quotidien, hebdomadaire, mensuel, annuel
+  - Jours spécifiques (ex: tous les lundis et vendredis)
+  - Intervalles (ex: toutes les 2 semaines)
+  - Limites (ex: 10 fois ou jusqu'au 31/12/2024)
+
+### 3. Calendrier intelligent
+- **Génération automatique** : Création des occurrences selon les règles
+- **Vue jour/semaine/mois** : Navigation intuitive
+- **Assignation** : Attribution des tâches aux membres
+- **États des tâches** :
+  - `pending` : À faire
+  - `snoozed` : Reportée
+  - `done` : Complétée
+  - `skipped` : Ignorée
+  - `overdue` : En retard
+
+### 4. Système de rappels
+- **Multi-canal** : Push notifications et emails
+- **Timing personnalisable** :
+  - Veille de l'échéance
+  - Jour même (matin)
+  - 2h avant l'échéance
+- **Heures silencieuses** : Pas de notifications la nuit
+- **Préférences par utilisateur** : Chacun configure ses rappels
+
+### 5. Suivi et statistiques
+- **Historique** : Qui a fait quoi et quand
+- **Durée réelle** : Temps passé vs estimé
+- **Taux de complétion** : Par personne, par pièce, global
+- **Photos de preuve** : Option pour documenter le travail effectué
+
+## 📊 Modèle de données
+
+### Tables principales
+
+#### `households` - Les foyers
+```sql
+- id: UUID (PK)
+- name: string
+- created_at: timestamp
+```
+
+#### `users` - Les utilisateurs (géré par Supabase Auth)
+```sql
+- id: UUID (PK) 
+- email: string (unique)
+- full_name: string
+- created_at: timestamp
+```
+
+#### `household_members` - Appartenance aux foyers
+```sql
+- id: UUID (PK)
+- household_id: UUID (FK → households)
+- user_id: UUID (FK → users)
+- role: enum('admin', 'member', 'guest')
+- joined_at: timestamp
+```
+
+#### `rooms` - Les pièces de la maison
+```sql
+- id: UUID (PK)
+- household_id: UUID (FK → households)
+- name: string
+- icon: string (emoji)
+- created_at: timestamp
+```
+
+#### `task_definitions` - Templates de tâches
+```sql
+- id: UUID (PK)
+- household_id: UUID (FK → households, NULL pour catalogue)
+- is_catalog: boolean
+- room_id: UUID (FK → rooms)
+- title: string
+- description: text
+- recurrence_rule: string (RRULE format)
+- estimated_minutes: integer
+- created_by: UUID (FK → users)
+- created_at: timestamp
+```
+
+#### `task_occurrences` - Instances de tâches
+```sql
+- id: UUID (PK)
+- task_id: UUID (FK → task_definitions)
+- scheduled_date: date
+- due_at: timestamp
+- status: enum('pending','snoozed','done','skipped','overdue')
+- assigned_to: UUID (FK → users)
+- snoozed_until: timestamp
+- created_at: timestamp
+```
+
+#### `task_completions` - Historique des complétions
+```sql
+- occurrence_id: UUID (PK, FK → task_occurrences)
+- completed_by: UUID (FK → users)
+- completed_at: timestamp
+- duration_minutes: integer
+- comment: text
+- photo_url: text
+- created_at: timestamp
+```
+
+## 🔄 Flux de données typique
+
+1. **Création d'une tâche récurrente**
+   ```
+   User → API → task_definitions (RRULE: "FREQ=WEEKLY;BYDAY=MO,FR")
+   ```
+
+2. **Génération des occurrences** (job automatique quotidien)
+   ```
+   Celery Beat → generate_occurrences → task_occurrences (30 jours à l'avance)
+   ```
+
+3. **Planification des rappels** (lors de la génération)
+   ```
+   Worker → schedule_notifications → notifications (J-1, Jour J, H-2)
+   ```
+
+4. **Envoi des rappels** (job toutes les 5 min)
+   ```
+   Worker → check notifications due → Expo Push / SMTP
+   ```
+
+5. **Complétion d'une tâche**
+   ```
+   User → API → task_occurrences (status=done) + task_completions
+   ```
+
+## 🛠️ Installation et développement
+
+### Prérequis
+- Python 3.12+
+- Node.js 20+
+- PostgreSQL 16+ (ou compte Supabase)
+- Redis (pour Celery)
+- uv (gestionnaire de packages Python)
+- pnpm (gestionnaire de packages Node)
+
+### Installation rapide
 
 ```bash
+# 1. Cloner le repo
 git clone https://github.com/your-org/cleaning-tracker.git
 cd cleaning-tracker
-pnpm install          # installs all JS workspaces (expo, web, ui, etc.)
-uv install           # installs Python dependencies
-turbo run build       # optional: warm the task cache
+
+# 2. Frontend (React Native)
+pnpm install
+cd apps/mobile
+pnpm expo start
+
+# 3. Backend (FastAPI)
+cd ../../api
+uv sync
+make dev  # Lance l'API en mode dev
+
+# 4. Workers (optionnel pour les rappels)
+make dev-worker  # Dans un autre terminal
 ```
 
-### Environment variables
+### Configuration
 
-Create **.env** at the repo root:
-
-```dotenv
-SUPABASE_URL=...
-SUPABASE_ANON_KEY=...
-EXPO_PUBLIC_SUPABASE_URL=$SUPABASE_URL
-EXPO_PUBLIC_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
-POSTGRES_PASSWORD=...
-```
-
-### Local dev
+Créer les fichiers `.env` nécessaires :
 
 ```bash
-# 1. Start Postgres (Docker)
-docker compose up db
-
-# 2. Run API with live-reload
-uv run uvicorn app.main:app --reload
-
-# 3. Launch Expo in web / mobile
-pnpm --filter mobile expo start --web
+# api/.env.dev
+DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+SUPABASE_URL=http://localhost:54321
+SUPABASE_ANON_KEY=your_anon_key
+SERVICE_ROLE_KEY=your_service_key
+SECRET_KEY=your_secret_key_for_jwt
+REDIS_URL=redis://localhost:6379/0
 ```
 
-The default seeds create a demo household, catalogue and sample tasks.
+## 📱 Captures d'écran
 
-### Tests
+[À ajouter : screenshots de l'app mobile montrant le calendrier, les tâches, les stats]
+
+## 🧪 Tests
 
 ```bash
-# API unit tests
-uv run pytest -q
+# Backend
+cd api
+make test          # Tous les tests
+make test-coverage # Avec couverture
 
-# End-to-end mobile flow
-maestro test flows/first_login.yaml   # Android & iOS simulators
+# Frontend  
+cd apps/mobile
+pnpm test
 ```
 
-CI executes **Pytest**, **Maestro**, and linting jobs in parallel via **GitHub Actions** using Turborepo’s remote cache for speed.
+## 📈 Roadmap
 
-## 🛠️ Useful Commands
+### MVP (Sprint 1) ✅
+- [x] Auth email/password
+- [x] Gestion des foyers
+- [x] CRUD tâches avec récurrence
+- [x] Calendrier de base
+- [x] Rappels push/email
 
-| Task                         | Command                                            |
-| ---------------------------- | -------------------------------------------------- |
-| Generate DB migrations       | `alembic revision --autogenerate -m "feat: tasks"` |
-| Run Celery workers           | `uv run celery -A app.worker worker -l info`   |
-| Trigger Expo OTA update      | `eas update --branch production`                   |
-| Invoke Edge Function locally | `supabase functions serve generate-occurrences`    |
+### v1.1 (Sprint 2) 🚧
+- [ ] Dashboard statistiques
+- [ ] Assignation automatique (round-robin)
+- [ ] Templates de planning (ex: "Grand ménage printemps")
+- [ ] Export CSV des historiques
 
-## 📦 Deployment
+### v1.2 (Sprint 3) 📋
+- [ ] Mode hors-ligne avec sync
+- [ ] Notifications in-app temps réel
+- [ ] Gamification (badges, streaks)
+- [ ] Intégration calendrier natif (iOS/Android)
 
-| Target        | Description                                                    |
-| ------------- | -------------------------------------------------------------- |
-| **Supabase**  | Provisioned Postgres, Auth, Storage + Edge Functions           |
-| **Cloud Run** | Containerised FastAPI + Celery workers (min = 0 instances)     |
-| **EAS Build** | Release binaries signed & uploaded to App Store / Play Console |
-
-CI/CD pipelines auto-tag Docker images, promote Supabase migrations and publish Expo OTA updates after successful test suites.
-
-## 🔗 Resources
-
-* Supabase Edge Functions overview ([Supabase][5])
-* Python invocation example ([Supabase][6])
-* FastAPI Background Tasks ([FastAPI][2])
-* React Native 0.78 release blog ([React Native][7])
-* Expo SDK 53 changelog ([Expo][8])
-* Celery 6 release notes ([GitHub][3])
-* APScheduler 4 version history ([apscheduler.readthedocs.io][4])
-* EAS Build documentation ([Expo Documentation][9])
-* Maestro testing docs ([maestro.mobile.dev][10])
-* Turborepo docs ([Turborepo][11])
-* PostgreSQL RLS guide ([PostgreSQL][1])
-
-## 🤝 Contributing
-
-1. Fork the repo & create a feature branch.
-2. Follow the coding-style conventions enforced by **ruff** and **prettier**.
-3. Add unit + integration tests for any new behaviour.
-4. Open a PR and ensure the GitHub Actions pipeline passes.
-
-## 📝 License
-
-Cleaning Tracker is released under the MIT License. See `LICENSE` for details.
-
-Enjoy keeping your home organised!
-
-[1]: https://www.postgresql.org/docs/current/ddl-rowsecurity.html?utm_source=chatgpt.com "Documentation: 17: 5.9. Row Security Policies - PostgreSQL"
-[2]: https://fastapi.tiangolo.com/tutorial/background-tasks/?utm_source=chatgpt.com "Background Tasks - FastAPI"
-[3]: https://github.com/celery/celery/releases?utm_source=chatgpt.com "Releases · celery/celery - GitHub"
-[4]: https://apscheduler.readthedocs.io/en/master/versionhistory.html?utm_source=chatgpt.com "Version history — APScheduler documentation - Read the Docs"
-[5]: https://supabase.com/docs/guides/functions?utm_source=chatgpt.com "Edge Functions | Supabase Docs"
-[6]: https://supabase.com/docs/reference/python/functions-invoke?utm_source=chatgpt.com "Python: Invokes a Supabase Edge Function."
-[7]: https://reactnative.dev/blog/2025/02/19/react-native-0.78?utm_source=chatgpt.com "React Native 0.78 - React 19 and more"
-[8]: https://expo.dev/changelog/sdk-53?utm_source=chatgpt.com "Expo SDK 53 - Expo Changelog"
-[9]: https://docs.expo.dev/build/introduction/?utm_source=chatgpt.com "EAS Build - Expo Documentation"
-[10]: https://maestro.mobile.dev/?utm_source=chatgpt.com "What is Maestro? | Maestro - Mobile.dev"
-[11]: https://turbo.build/repo/docs?utm_source=chatgpt.com "Introduction | Turborepo"
+### Futur
+- [ ] IA pour suggestions de planning optimal
+- [ ] Intégrations domotique (démarrer aspirateur robot)
+- [ ] Mode colocation avec espaces privés/partagés
+- [ ] Application Apple Watch / WearOS
