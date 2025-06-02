@@ -1,5 +1,17 @@
+import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
+
+
+def get_env_file() -> str:
+    """Détermine le fichier .env à utiliser selon l'environnement"""
+    env = os.getenv("ENVIRONMENT", "development")
+    env_files = {
+        "development": ".env.dev",
+        "staging": ".env.staging", 
+        "production": ".env.prod"
+    }
+    return env_files.get(env, ".env.dev")
 
 
 class Settings(BaseSettings):
@@ -22,10 +34,12 @@ class Settings(BaseSettings):
     def celery_broker_url(self) -> str:
         return self.redis_url
 
-    # Add other settings as needed
+    # S3 settings
+    s3_access_key: Optional[str] = None
+    s3_secret_key: Optional[str] = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",  # Chemin relatif depuis la racine du projet
+        env_file=get_env_file(),  # Appel de la fonction
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,

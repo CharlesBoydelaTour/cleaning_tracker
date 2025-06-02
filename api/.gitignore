@@ -2,15 +2,29 @@
 .branches
 .temp
 
+# Variables d'environnement sensibles
 .env.keys
 .env.local
 .env.*.local
 .env
+.env.prod
+.env.staging
+.env.dev
+
+# Logs
 app.log
+logs/*.log
+
+# Python
 .pyc
 __pycache__
 .venv
-.vscode
-.ruff_cache
 .pytest_cache
 api.egg-info
+
+# IDE
+.vscode
+.idea
+
+# Outils
+.ruff_cache

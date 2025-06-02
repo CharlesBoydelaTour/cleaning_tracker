@@ -18,6 +18,42 @@ async def init_db_pool():
 
 
 # ============================================================================
+# USER CRUD
+# ============================================================================
+
+async def create_user(
+    pool: asyncpg.Pool,
+    email: str,
+    hashed_password: str,
+    full_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """Créer un nouvel utilisateur"""
+    async with pool.acquire() as conn:
+        user_id = await conn.fetchval(
+            """
+            INSERT INTO users (id, email, full_name, hashed_password, created_at, updated_at, is_active)
+            VALUES (gen_random_uuid(), $1, $2, $3, NOW(), NOW(), TRUE)
+            RETURNING id
+            """,
+            email,
+            full_name,
+            hashed_password
+        )
+
+        user_data = await conn.fetchrow(
+            """
+            SELECT id, email, full_name, hashed_password, created_at, updated_at, 
+                   email_confirmed_at, is_active, is_superuser
+            FROM users
+            WHERE id = $1
+            """,
+            user_id
+        )
+
+        return dict(user_data)
+
+
+# ============================================================================
 # TASK DEFINITIONS CRUD
 # ============================================================================
 

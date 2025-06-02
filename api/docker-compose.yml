@@ -7,21 +7,10 @@ services:
     container_name: cleaning_tracker_api
     ports:
       - "8000:8000"
+    env_file:
+      - .env.prod # Fichier par défaut pour production
     environment:
-      # Variables d'environnement (à définir dans .env)
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - REDIS_URL=redis://redis:6379/0
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
-      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-      - LOG_FORMAT=json
+      - REDIS_URL=redis://redis:6379/0 # Override pour Docker
     volumes:
       - ./logs:/app/logs
     depends_on:
@@ -39,16 +28,10 @@ services:
   celery_worker:
     build: .
     container_name: cleaning_tracker_celery_worker
+    env_file:
+      - .env.prod # Fichier par défaut pour production
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - REDIS_URL=redis://redis:6379/0
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
-      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER}
+      - REDIS_URL=redis://redis:6379/0 # Override pour Docker
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO

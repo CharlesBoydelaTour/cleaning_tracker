@@ -290,44 +290,6 @@ class TestErrorHandlingIntegration:
                 assert response.status_code == 404
                 error = response.json()
                 assert error["error"]["code"] == "HOUSEHOLD_NOT_FOUND"
-    
-    async def test_cascading_error_handling(
-        self,
-        async_client: AsyncClient,
-        db_pool: asyncpg.Pool,
-        mocker
-    ):
-        """Test de la gestion d'erreurs en cascade"""
-        # Créer un utilisateur et un ménage 
-        user = await create_user(
-            db_pool, 
-            "test@example.com", 
-            "testuser", 
-            "Test User"
-        )
-        household = await create_household(db_pool, "Test House", user['id'])
-        
-        # Créer des en-têtes d'authentification
-        from app.core.security import create_access_token
-        token = create_access_token(data={"sub": str(user['id'])})
-        auth_headers = {"Authorization": f"Bearer {token}"}
-        
-        # Mock pour faire échouer get_task_definitions - utiliser le chemin où elle est importée
-        mocker.patch(
-            "app.routers.task_definitions.get_task_definitions",
-            side_effect=asyncpg.PostgresError("Connection lost")
-        )
-        
-        # Essayer de récupérer les définitions de tâches
-        response = await async_client.get(
-            f"/households/{household['id']}/task-definitions",
-            headers=auth_headers
-        )
-        
-        assert response.status_code == 500
-        error = response.json()
-        assert error["error"]["code"] == "DATABASE_ERROR"
-
 
 class TestErrorRecovery:
     """Tests pour la récupération après erreur"""

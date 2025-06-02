@@ -5,16 +5,10 @@ services:
     container_name: cleaning_tracker_api_dev
     ports:
       - "8000:8000"
+    env_file:
+      - .env.staging # Utilise le fichier staging pour le dev Docker
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - REDIS_URL=redis://redis:6379/0
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
-      - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
-      - LOG_FORMAT=text
+      - REDIS_URL=redis://redis:6379/0 # Override pour Docker
     volumes:
       - .:/app
       - /app/.venv # Ajout pour préserver le venv de l'image
@@ -29,15 +23,10 @@ services:
   celery_worker:
     build: .
     container_name: cleaning_tracker_celery_worker_dev
+    env_file:
+      - .env.staging # Utilise le fichier staging pour le dev Docker
     environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - REDIS_URL=redis://redis:6379/0
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-      - SERVICE_ROLE_KEY=${SERVICE_ROLE_KEY}
-      - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
+      - REDIS_URL=redis://redis:6379/0 # Override pour Docker
     volumes:
       - .:/app
       - /app/.venv # Ajout pour préserver le venv de l'image
