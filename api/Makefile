@@ -42,6 +42,7 @@ install-dev: ## Installe les dépendances de développement
 dev: ## Lance l'API en mode développement local
 	@echo "$(GREEN)🚀 Démarrage en mode développement local...$(RESET)"
 	@chmod +x scripts/start-dev.sh
+	@./scripts/start-dev.sh
 	
 dev-worker: ## Lance le worker Celery en mode développement
 	@echo "$(GREEN)👷 Démarrage du worker Celery...$(RESET)"
