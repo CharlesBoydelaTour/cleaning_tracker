@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Calendar, BarChart3, Settings, Plus, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,69 +9,51 @@ import Header from "@/components/Header";
 import TaskCard from "@/components/TaskCard";
 import Navigation from "@/components/Navigation";
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
+import { useHouseholds } from '@/contexts/HouseholdContext';
+import { tasksService } from '@/services/tasks.service';
 
-// Mock data for demonstration
-const mockTasks = [
-  {
-    id: 1,
-    title: "Vacuum living room",
-    description: "Weekly deep clean of the living room carpet",
-    room: "Living Room",
-    assignee: "Sarah",
-    estimatedDuration: 30,
-    status: "todo" as const,
-    dueTime: "10:00 AM",
-    recurrence: "Weekly"
-  },
-  {
-    id: 2,
-    title: "Clean bathroom mirrors",
-    description: "Wipe down all mirrors in the main bathroom",
-    room: "Bathroom",
-    assignee: "Mike",
-    estimatedDuration: 15,
-    status: "completed" as const,
-    dueTime: "9:00 AM",
-    completedAt: "9:15 AM",
-    recurrence: "Daily"
-  },
-  {
-    id: 3,
-    title: "Take out trash",
-    description: "Empty all trash bins and take to curb",
-    room: "Kitchen",
-    assignee: "Sarah",
-    estimatedDuration: 10,
-    status: "overdue" as const,
-    dueTime: "8:00 AM",
-    recurrence: "Twice weekly"
-  },
-  {
-    id: 4,
-    title: "Water plants",
-    description: "Water all indoor plants in living room and bedroom",
-    room: "Multiple",
-    assignee: "Mike",
-    estimatedDuration: 15,
-    status: "todo" as const,
-    dueTime: "2:00 PM",
-    recurrence: "Every 3 days"
-  }
-];
 
 const Index = () => {
-  const [activeHousehold] = useState("The Smith Family");
+  const { activeHousehold } = useHouseholds();
+  const [tasks, setTasks] = useState<any[]>([]);
 
-  const todayTasks = mockTasks;
-  const completedTasks = todayTasks.filter(task => task.status === "completed");
-  const overdueTasks = todayTasks.filter(task => task.status === "overdue");
-  const todoTasks = todayTasks.filter(task => task.status === "todo");
+  useEffect(() => {
+    if (!activeHousehold) return;
+    const today = new Date().toISOString().slice(0, 10);
+    tasksService
+      .listOccurrences(activeHousehold.id, { start_date: today, end_date: today })
+      .then((data) => {
+        const mapped = data.map((occ) => ({
+          id: occ.id,
+          title: occ.task_title,
+          description: occ.task_description,
+          room: occ.room_name,
+          assignee: occ.assigned_user_email || '',
+          estimatedDuration: occ.estimated_minutes || 0,
+          status:
+            occ.status === 'done'
+              ? 'completed'
+              : occ.status === 'overdue'
+              ? 'overdue'
+              : 'todo',
+          dueTime: occ.due_at ? new Date(occ.due_at).toLocaleTimeString() : '',
+        }));
+        setTasks(mapped);
+      })
+      .catch((err) => console.error(err));
+  }, [activeHousehold]);
+
+  const completedTasks = tasks.filter((t) => t.status === 'completed');
+  const overdueTasks = tasks.filter((t) => t.status === 'overdue');
+  const todoTasks = tasks.filter((t) => t.status === 'todo');
+
+  const todayTasks = tasks;
 
   const completionRate = Math.round((completedTasks.length / todayTasks.length) * 100);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
+      <Header activeHousehold={activeHousehold?.name} />
 
       <div className="container mx-auto px-4">
         <EmailVerificationBanner />
