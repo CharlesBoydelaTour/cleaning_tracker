@@ -9,15 +9,22 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { authService } from '@/services/auth.service';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 const Profile = () => {
   const { toast } = useToast();
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+  const [isDeleting, setIsDeleting] = useState(false);
   const [activeHousehold] = useState("The Smith Family");
   const [profile, setProfile] = useState({
     name: 'Sarah Smith',
     email: 'sarah@example.com'
   });
-  
+
   const [notifications, setNotifications] = useState({
     pushEnabled: true,
     emailEnabled: true,
@@ -35,14 +42,14 @@ const Profile = () => {
     try {
       // TODO: Replace with actual Supabase/FastAPI call
       console.log('Updating profile:', profile);
-      
+
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       toast({
         title: "Profile updated",
         description: "Your profile has been updated successfully.",
       });
-      
+
     } catch (error) {
       toast({
         title: "Error",
@@ -58,12 +65,12 @@ const Profile = () => {
     try {
       // TODO: Replace with actual Supabase/FastAPI call
       console.log('Updating notifications:', notifications);
-      
+
       toast({
         title: "Preferences updated",
         description: "Your notification preferences have been saved.",
       });
-      
+
     } catch (error) {
       toast({
         title: "Error",
@@ -73,19 +80,37 @@ const Profile = () => {
     }
   };
 
-  const handleDeleteAccount = () => {
-    // TODO: Implement account deletion with confirmation dialog
-    toast({
-      title: "Delete Account",
-      description: "Account deletion requires confirmation.",
-      variant: "destructive",
-    });
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true);
+    try {
+      await authService.deleteAccount();
+
+      // Nettoyer et rediriger
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+
+      toast({
+        title: "Compte supprimé",
+        description: "Votre compte a été supprimé avec succès.",
+      });
+
+      // Rediriger vers la page de signup
+      navigate('/signup');
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le compte.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header activeHousehold={activeHousehold} />
-      
+
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="max-w-2xl space-y-6">
           <div>
@@ -134,7 +159,7 @@ const Profile = () => {
                   </div>
                 </div>
 
-                <Button 
+                <Button
                   type="submit"
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                   disabled={isLoading}
@@ -229,7 +254,7 @@ const Profile = () => {
                 </div>
                 <Switch
                   checked={notifications.pushEnabled}
-                  onCheckedChange={(checked) => 
+                  onCheckedChange={(checked) =>
                     setNotifications({ ...notifications, pushEnabled: checked })
                   }
                 />
@@ -242,7 +267,7 @@ const Profile = () => {
                 </div>
                 <Switch
                   checked={notifications.emailEnabled}
-                  onCheckedChange={(checked) => 
+                  onCheckedChange={(checked) =>
                     setNotifications({ ...notifications, emailEnabled: checked })
                   }
                 />
@@ -255,7 +280,7 @@ const Profile = () => {
                 <Input
                   type="number"
                   value={notifications.reminderTime}
-                  onChange={(e) => 
+                  onChange={(e) =>
                     setNotifications({ ...notifications, reminderTime: parseInt(e.target.value) || 0 })
                   }
                   className="w-32"
@@ -270,7 +295,7 @@ const Profile = () => {
                   <Input
                     type="time"
                     value={notifications.quietHoursStart}
-                    onChange={(e) => 
+                    onChange={(e) =>
                       setNotifications({ ...notifications, quietHoursStart: e.target.value })
                     }
                   />
@@ -283,16 +308,16 @@ const Profile = () => {
                   <Input
                     type="time"
                     value={notifications.quietHoursEnd}
-                    onChange={(e) => 
+                    onChange={(e) =>
                       setNotifications({ ...notifications, quietHoursEnd: e.target.value })
                     }
                   />
                 </div>
               </div>
 
-              <Button 
+              <Button
                 onClick={handleNotificationUpdate}
-                variant="outline" 
+                variant="outline"
                 className="border-gray-200 hover:bg-gray-50"
               >
                 Save Preferences
@@ -314,14 +339,37 @@ const Profile = () => {
                   <p className="text-sm text-gray-600 mb-4">
                     Permanently delete your account and all associated data. This action cannot be undone.
                   </p>
-                  <Button 
-                    onClick={handleDeleteAccount}
-                    variant="destructive" 
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Account
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        className="bg-red-600 hover:bg-red-700"
+                        disabled={isDeleting}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Account
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you sure ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action will permanently delete your account and all associated data.
+                          You will not be able to recover your account after this.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={handleDeleteAccount}
+                          className="bg-red-600 hover:bg-red-700"
+                          disabled={isDeleting}
+                        >
+                          {isDeleting ? 'Suppression...' : 'Supprimer le compte'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             </CardContent>

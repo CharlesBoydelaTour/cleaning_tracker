@@ -1,97 +1,93 @@
-
-import { useState } from "react";
-import { ChevronDown, Menu, Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React from 'react';
+import { ChevronDown, User, LogOut, Mail } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/dropdown-menu';
+import { useAuth } from '@/contexts/AuthContext';
+import { Link } from 'react-router-dom';
 
 interface HeaderProps {
-  activeHousehold: string;
+  activeHousehold?: string;
 }
 
-const Header = ({ activeHousehold }: HeaderProps) => {
-  const [notificationCount] = useState(3);
+const Header: React.FC<HeaderProps> = ({ activeHousehold }) => {
+  const { user, logout } = useAuth();
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo/Brand */}
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">HC</span>
-            </div>
-            <span className="font-semibold text-gray-900 hidden sm:block">HomeChores</span>
-          </div>
-
-          {/* Household Selector */}
-          <div className="flex-1 max-w-xs mx-4">
+    <header className="bg-white border-b border-gray-200 px-4 py-3">
+      <div className="container mx-auto flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link to="/" className="text-xl font-bold text-gray-900">
+            HomeChores
+          </Link>
+          {activeHousehold && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="w-full justify-between border-gray-200 hover:bg-gray-50"
-                >
-                  <span className="truncate">{activeHousehold}</span>
-                  <ChevronDown className="h-4 w-4 ml-2 flex-shrink-0" />
+                <Button variant="ghost" className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{activeHousehold}</span>
+                  <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-64">
-                <DropdownMenuItem className="font-medium">
-                  {activeHousehold}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
+              <DropdownMenuContent align="start" className="w-48">
                 <DropdownMenuItem>
-                  The Johnson Home
+                  <Link to="/households" className="w-full">
+                    Switch Household
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem>
-                  Downtown Apartment
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  Create New Household
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  Manage Households
+                  <Link to="/households" className="w-full">
+                    Manage Households
+                  </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          </div>
-
-          {/* Right side actions */}
-          <div className="flex items-center gap-2">
-            {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
-              {notificationCount > 0 && (
-                <Badge 
-                  variant="destructive" 
-                  className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs bg-orange-500 hover:bg-orange-600"
-                >
-                  {notificationCount}
-                </Badge>
-              )}
-            </Button>
-
-            {/* Menu (mobile) */}
-            <Button variant="ghost" size="icon" className="md:hidden">
-              <Menu className="h-5 w-5" />
-            </Button>
-
-            {/* Profile (desktop) */}
-            <div className="hidden md:flex items-center gap-2">
-              <div className="h-8 w-8 bg-gray-200 rounded-full flex items-center justify-center">
-                <span className="text-gray-600 font-medium text-sm">S</span>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="flex items-center gap-2">
+              <div className="h-8 w-8 bg-blue-100 rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-blue-600" />
+              </div>
+              <span className="hidden md:inline text-sm font-medium">
+                {user?.full_name || user?.email || 'User'}
+              </span>
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <div className="px-2 py-1.5">
+              <p className="text-sm text-gray-600">{user?.email}</p>
+              {user && !user.email_confirmed_at && (
+                <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  Email non vérifié
+                </p>
+              )}
+            </div>
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem asChild>
+              <Link to="/profile" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={logout}
+              className="flex items-center gap-2 text-red-600 focus:text-red-600"
+            >
+              <LogOut className="h-4 w-4" />
+              Logout
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

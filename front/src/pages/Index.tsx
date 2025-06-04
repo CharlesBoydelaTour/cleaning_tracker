@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import Header from "@/components/Header";
 import TaskCard from "@/components/TaskCard";
 import Navigation from "@/components/Navigation";
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 
 // Mock data for demonstration
 const mockTasks = [
@@ -60,18 +61,22 @@ const mockTasks = [
 
 const Index = () => {
   const [activeHousehold] = useState("The Smith Family");
-  
+
   const todayTasks = mockTasks;
   const completedTasks = todayTasks.filter(task => task.status === "completed");
   const overdueTasks = todayTasks.filter(task => task.status === "overdue");
   const todoTasks = todayTasks.filter(task => task.status === "todo");
-  
+
   const completionRate = Math.round((completedTasks.length / todayTasks.length) * 100);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header activeHousehold={activeHousehold} />
-      
+
+      <div className="container mx-auto px-4">
+        <EmailVerificationBanner />
+      </div>
+
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         {/* Today Overview Card */}
         <Card className="mb-6 shadow-sm border-0 bg-white">
@@ -102,7 +107,7 @@ const Index = () => {
                 <div className="text-sm text-gray-600">Remaining</div>
               </div>
             </div>
-            
+
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Daily Progress</span>

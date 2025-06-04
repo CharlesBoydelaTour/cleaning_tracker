@@ -32,5 +32,17 @@ export const authService = {
 
   async requestPasswordReset(email: string): Promise<void> {
     await apiClient.post('/auth/reset-password', { email });
+  },
+
+  async deleteAccount(): Promise<void> {
+    await apiClient.delete('/auth/me');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+  },
+
+  async resendVerificationEmail(email: string): Promise<void> {
+    await apiClient.post('/auth/resend-verification-email', null, {
+      params: { email }
+    });
   }
 };

@@ -1,9 +1,12 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { PrivateRoute } from "@/components/PrivateRoute";
+
+// Pages
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -26,23 +29,69 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/households" element={<Households />} />
-          <Route path="/households/:id" element={<HouseholdDetail />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/tasks/new" element={<TaskForm />} />
-          <Route path="/tasks/:id/edit" element={<TaskForm />} />
-          <Route path="/calendar" element={<Calendar />} />
-          <Route path="/occurrences/:id" element={<OccurrenceDetail />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/stats" element={<Statistics />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            {/* Routes publiques */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* Routes privées */}
+            <Route path="/" element={
+              <PrivateRoute>
+                <Index />
+              </PrivateRoute>
+            } />
+            <Route path="/households" element={
+              <PrivateRoute>
+                <Households />
+              </PrivateRoute>
+            } />
+            <Route path="/households/:id" element={
+              <PrivateRoute>
+                <HouseholdDetail />
+              </PrivateRoute>
+            } />
+            <Route path="/tasks" element={
+              <PrivateRoute>
+                <Tasks />
+              </PrivateRoute>
+            } />
+            <Route path="/tasks/new" element={
+              <PrivateRoute>
+                <TaskForm />
+              </PrivateRoute>
+            } />
+            <Route path="/tasks/:id/edit" element={
+              <PrivateRoute>
+                <TaskForm />
+              </PrivateRoute>
+            } />
+            <Route path="/calendar" element={
+              <PrivateRoute>
+                <Calendar />
+              </PrivateRoute>
+            } />
+            <Route path="/occurrences/:id" element={
+              <PrivateRoute>
+                <OccurrenceDetail />
+              </PrivateRoute>
+            } />
+            <Route path="/profile" element={
+              <PrivateRoute>
+                <Profile />
+              </PrivateRoute>
+            } />
+            <Route path="/stats" element={
+              <PrivateRoute>
+                <Statistics />
+              </PrivateRoute>
+            } />
+
+            {/* 404 */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

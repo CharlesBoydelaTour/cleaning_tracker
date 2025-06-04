@@ -1,12 +1,11 @@
-
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { Link } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Link, Navigate } from 'react-router-dom';
 
 const Signup = () => {
   const [email, setEmail] = useState('');
@@ -15,7 +14,13 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; fullName?: string; general?: string }>({});
-  const { toast } = useToast();
+
+  const { signup, isAuthenticated } = useAuth();
+
+  // Rediriger si déjà connecté
+  if (isAuthenticated) {
+    return <Navigate to="/" replace />;
+  }
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -57,7 +62,7 @@ const Signup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -66,24 +71,9 @@ const Signup = () => {
     setErrors({});
 
     try {
-      // TODO: Replace with actual Supabase/FastAPI registration call
-      console.log('Signup attempt:', { email, password, fullName });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      toast({
-        title: "Account created successfully",
-        description: "Please check your email to verify your account.",
-      });
-      
-    } catch (error) {
-      setErrors({ general: 'Failed to create account. Please try again.' });
-      toast({
-        title: "Signup failed",
-        description: "Please try again.",
-        variant: "destructive",
-      });
+      await signup({ email, password, full_name: fullName });
+    } catch (error: any) {
+      setErrors({ general: error.message });
     } finally {
       setIsLoading(false);
     }
@@ -181,16 +171,15 @@ const Signup = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-                
+
                 {password && (
                   <div className="space-y-2">
                     <div className="flex gap-1">
                       {[1, 2, 3, 4, 5].map((level) => (
                         <div
                           key={level}
-                          className={`h-1 flex-1 rounded ${
-                            level <= passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-200'
-                          }`}
+                          className={`h-1 flex-1 rounded ${level <= passwordStrength ? strengthColors[passwordStrength - 1] : 'bg-gray-200'
+                            }`}
                         />
                       ))}
                     </div>
@@ -199,7 +188,7 @@ const Signup = () => {
                     </p>
                   </div>
                 )}
-                
+
                 {errors.password && (
                   <p className="text-sm text-red-600">{errors.password}</p>
                 )}

@@ -1,11 +1,11 @@
-
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { Link, useLocation, Navigate } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -13,7 +13,15 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
-  const { toast } = useToast();
+
+  const { login, isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  // Rediriger si déjà connecté
+  if (isAuthenticated) {
+    const from = location.state?.from?.pathname || '/';
+    return <Navigate to={from} replace />;
+  }
 
   const validateEmail = (email: string) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -41,7 +49,7 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
@@ -50,25 +58,9 @@ const Login = () => {
     setErrors({});
 
     try {
-      // TODO: Replace with actual authentication API call
-      console.log('Login attempt:', { email, password });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Simulate success - in real app, this would redirect to dashboard
-      toast({
-        title: "Login successful",
-        description: "Welcome back!",
-      });
-      
-    } catch (error) {
-      setErrors({ general: 'Invalid email or password. Please try again.' });
-      toast({
-        title: "Login failed",
-        description: "Please check your credentials and try again.",
-        variant: "destructive",
-      });
+      await login({ email, password });
+    } catch (error: any) {
+      setErrors({ general: error.message });
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +69,6 @@ const Login = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
-        {/* Logo/Brand */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">HomeChores</h1>
           <p className="text-gray-600">Welcome back! Please sign in to your account.</p>
@@ -91,14 +82,12 @@ const Login = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* General Error */}
               {errors.general && (
                 <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
                   {errors.general}
                 </div>
               )}
 
-              {/* Email Field */}
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                   Email address
@@ -120,7 +109,6 @@ const Login = () => {
                 )}
               </div>
 
-              {/* Password Field */}
               <div className="space-y-2">
                 <Label htmlFor="password" className="text-sm font-medium text-gray-700">
                   Password
@@ -150,18 +138,15 @@ const Login = () => {
                 )}
               </div>
 
-              {/* Forgot Password Link */}
               <div className="text-right">
-                <button
-                  type="button"
+                <Link
+                  to="/reset-password"
                   className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
-                  disabled={isLoading}
                 >
                   Forgot your password?
-                </button>
+                </Link>
               </div>
 
-              {/* Submit Button */}
               <Button
                 type="submit"
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
@@ -181,19 +166,17 @@ const Login = () => {
               </Button>
             </form>
 
-            {/* Sign Up Link */}
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Don't have an account?{' '}
-                <button className="text-blue-600 hover:text-blue-700 hover:underline font-medium">
+                <Link to="/signup" className="text-blue-600 hover:text-blue-700 hover:underline font-medium">
                   Create account
-                </button>
+                </Link>
               </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Footer */}
         <div className="text-center text-xs text-gray-500">
           By signing in, you agree to our Terms of Service and Privacy Policy.
         </div>
