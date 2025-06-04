@@ -1,6 +1,6 @@
 import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+from typing import Optional, List
 
 
 def get_env_file() -> str:
@@ -8,8 +8,8 @@ def get_env_file() -> str:
     env = os.getenv("ENVIRONMENT", "development")
     env_files = {
         "development": ".env.dev",
-        "staging": ".env.staging", 
-        "production": ".env.prod"
+        "staging": ".env.staging",
+        "production": ".env.prod",
     }
     return env_files.get(env, ".env.dev")
 
@@ -62,11 +62,20 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = None
     sender_email: str = "noreply@cleaningtracker.com"
     sender_name: str = "Cleaning Tracker"
-    
+
     # URL de l'application (pour les liens dans les emails)
     app_url: str = "https://cleaningtracker.com"
-    
+
     # Expo push notifications
     expo_access_token: Optional[str] = None
+
+    # CORS origins allowed for the API
+    cors_origins: List[str] = [
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
 
 settings = Settings()
