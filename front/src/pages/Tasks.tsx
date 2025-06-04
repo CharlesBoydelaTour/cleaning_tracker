@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Search, Filter, Plus, Clock, Home as HomeIcon, Copy, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,63 +9,31 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import { Link } from 'react-router-dom';
+import { useHouseholds } from '@/contexts/HouseholdContext';
+import { tasksService } from '@/services/tasks.service';
 
-// Mock data
-const mockTasks = [
-  {
-    id: 1,
-    title: "Vacuum living room",
-    description: "Weekly deep clean of the living room carpet",
-    room: "Living Room",
-    estimatedDuration: 30,
-    recurrence: "Weekly",
-    isGlobal: false
-  },
-  {
-    id: 2,
-    title: "Clean bathroom mirrors",
-    description: "Wipe down all mirrors in the main bathroom",
-    room: "Bathroom",
-    estimatedDuration: 15,
-    recurrence: "Daily",
-    isGlobal: false
-  },
-  {
-    id: 3,
-    title: "Take out trash",
-    description: "Empty all trash bins and take to curb",
-    room: "Kitchen",
-    estimatedDuration: 10,
-    recurrence: "Twice weekly",
-    isGlobal: true
-  },
-  {
-    id: 4,
-    title: "Water plants",
-    description: "Water all indoor plants",
-    room: "Multiple",
-    estimatedDuration: 15,
-    recurrence: "Every 3 days",
-    isGlobal: true
-  }
-];
 
 const Tasks = () => {
-  const [tasks] = useState(mockTasks);
+  const { activeHousehold } = useHouseholds();
+  const [tasks, setTasks] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('my-tasks');
-  const [activeHousehold] = useState("The Smith Family");
+
+  useEffect(() => {
+    if (!activeHousehold) return;
+    tasksService.listDefinitions(activeHousehold.id).then(setTasks).catch(console.error);
+  }, [activeHousehold]);
 
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          task.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTab = activeTab === 'my-tasks' ? !task.isGlobal : task.isGlobal;
+    const matchesTab = activeTab === 'my-tasks' ? !task.is_catalog : task.is_catalog;
     return matchesSearch && matchesTab;
   });
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
+      <Header activeHousehold={activeHousehold?.name} />
       
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center justify-between mb-6">

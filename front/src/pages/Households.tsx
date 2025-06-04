@@ -1,43 +1,27 @@
 
-import React, { useState } from 'react';
-import { Home, Users, Plus, Settings } from 'lucide-react';
+import React from 'react';
+import { Home, Plus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Header from '@/components/Header';
 import Navigation from '@/components/Navigation';
 import { Link } from 'react-router-dom';
-
-// Mock data
-const mockHouseholds = [
-  {
-    id: 1,
-    name: "The Smith Family",
-    role: "Admin",
-    memberCount: 4,
-    isActive: true
-  },
-  {
-    id: 2,
-    name: "Downtown Apartment",
-    role: "Member",
-    memberCount: 2,
-    isActive: false
-  }
-];
+import { useHouseholds } from '@/contexts/HouseholdContext';
 
 const Households = () => {
-  const [households] = useState(mockHouseholds);
-  const [activeHousehold] = useState("The Smith Family");
+  const { households, activeHousehold, setActiveHousehold, loading } = useHouseholds();
 
-  const handleSelectHousehold = (householdId: number) => {
-    // TODO: Implement household selection logic
-    console.log('Selected household:', householdId);
+  const handleSelectHousehold = (householdId: string) => {
+    const selected = households.find(h => h.id === householdId);
+    if (selected) {
+      setActiveHousehold(selected);
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
+      <Header activeHousehold={activeHousehold?.name} />
       
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center justify-between mb-6">
@@ -62,42 +46,24 @@ const Households = () => {
                         {household.name}
                       </CardTitle>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge 
-                          variant={household.role === 'Admin' ? 'default' : 'secondary'}
-                          className={household.role === 'Admin' 
-                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
-                            : 'bg-gray-100 text-gray-700 border-gray-200'
-                          }
-                        >
-                          {household.role}
+                        <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">
+                          Household
                         </Badge>
-                        {household.isActive && (
-                          <Badge className="bg-green-100 text-green-800 border-green-200">
-                            Active
-                          </Badge>
-                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
-                  <Users className="h-4 w-4" />
-                  <span>{household.memberCount} members</span>
-                </div>
-                
                 <div className="flex gap-2">
-                  {!household.isActive && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSelectHousehold(household.id)}
-                      className="flex-1 border-blue-200 text-blue-600 hover:bg-blue-50"
-                    >
-                      Select
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSelectHousehold(household.id)}
+                    className="flex-1 border-blue-200 text-blue-600 hover:bg-blue-50"
+                  >
+                    Select
+                  </Button>
                   <Link to={`/households/${household.id}`} className="flex-1">
                     <Button variant="outline" size="sm" className="w-full border-gray-200 hover:bg-gray-50">
                       <Settings className="h-4 w-4 mr-1" />
