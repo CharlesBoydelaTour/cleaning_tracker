@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import Header from "@/components/Header";
 import TaskCard from "@/components/TaskCard";
-import Navigation from "@/components/Navigation";
+import AppLayout from "@/components/AppLayout";
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 
 // Mock data for demonstration
@@ -70,9 +69,7 @@ const Index = () => {
   const completionRate = Math.round((completedTasks.length / todayTasks.length) * 100);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-
+    <AppLayout activeHousehold={activeHousehold}>
       <div className="container mx-auto px-4">
         <EmailVerificationBanner />
       </div>
@@ -187,9 +184,7 @@ const Index = () => {
           </div>
         )}
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

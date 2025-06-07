@@ -6,8 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { Link } from 'react-router-dom';
 
 // Mock data
@@ -58,15 +57,13 @@ const Tasks = () => {
 
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description.toLowerCase().includes(searchTerm.toLowerCase());
+      task.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesTab = activeTab === 'my-tasks' ? !task.isGlobal : task.isGlobal;
     return matchesSearch && matchesTab;
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-      
+    <AppLayout activeHousehold={activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Task Definitions</h1>
@@ -138,11 +135,11 @@ const Tasks = () => {
                           <span>{task.estimatedDuration}m</span>
                         </div>
                       </div>
-                      
+
                       <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">
                         {task.recurrence}
                       </Badge>
-                      
+
                       <div className="flex gap-2 pt-2">
                         <Button variant="ghost" size="sm" className="flex-1 hover:bg-gray-50">
                           <Copy className="h-4 w-4 mr-1" />
@@ -186,11 +183,11 @@ const Tasks = () => {
                         <span>{task.estimatedDuration}m</span>
                       </div>
                     </div>
-                    
+
                     <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">
                       {task.recurrence}
                     </Badge>
-                    
+
                     <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white">
                       <Plus className="h-4 w-4 mr-2" />
                       Add to My Tasks
@@ -202,9 +199,7 @@ const Tasks = () => {
           </TabsContent>
         </Tabs>
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

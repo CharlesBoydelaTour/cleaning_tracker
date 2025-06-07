@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { Link, useParams } from 'react-router-dom';
 
 // Mock data
@@ -32,9 +31,7 @@ const HouseholdDetail = () => {
   const [activeTab, setActiveTab] = useState("members");
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={household.name} />
-      
+    <AppLayout activeHousehold={household.name}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center gap-4 mb-6">
           <Link to="/households">
@@ -95,10 +92,10 @@ const HouseholdDetail = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Badge 
+                        <Badge
                           variant={member.role === 'Admin' ? 'default' : 'secondary'}
-                          className={member.role === 'Admin' 
-                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                          className={member.role === 'Admin'
+                            ? 'bg-blue-100 text-blue-800 border-blue-200'
                             : 'bg-gray-100 text-gray-700 border-gray-200'
                           }
                         >
@@ -179,9 +176,7 @@ const HouseholdDetail = () => {
           </TabsContent>
         </Tabs>
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

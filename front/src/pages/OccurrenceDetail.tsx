@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { Link, useParams } from 'react-router-dom';
 
 const OccurrenceDetail = () => {
@@ -26,7 +25,7 @@ const OccurrenceDetail = () => {
     assignee: "Sarah Smith",
     scheduledTime: "10:00 AM",
     estimatedDuration: 30,
-    status: "todo" as const,
+    status: "todo" as "todo" | "completed" | "overdue",
     recurrence: "Weekly",
     history: [
       { date: "2024-05-20", completedBy: "Mike", duration: 25, comment: "Moved all furniture for thorough cleaning" },
@@ -38,12 +37,12 @@ const OccurrenceDetail = () => {
     try {
       // TODO: Replace with actual Supabase/FastAPI call
       console.log('Completing task:', { id, duration, comment });
-      
+
       toast({
         title: "Task completed",
         description: "Great job! The task has been marked as complete.",
       });
-      
+
     } catch (error) {
       toast({
         title: "Error",
@@ -78,9 +77,7 @@ const OccurrenceDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-      
+    <AppLayout activeHousehold={activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center gap-4 mb-6">
           <Link to="/calendar">
@@ -91,12 +88,12 @@ const OccurrenceDetail = () => {
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-2xl font-bold text-gray-900">{occurrence.title}</h1>
-              <Badge 
+              <Badge
                 variant="secondary"
                 className={
                   occurrence.status === 'completed' ? 'bg-green-100 text-green-800 border-green-200' :
-                  occurrence.status === 'overdue' ? 'bg-red-100 text-red-800 border-red-200' :
-                  'bg-blue-100 text-blue-800 border-blue-200'
+                    occurrence.status === 'overdue' ? 'bg-red-100 text-red-800 border-red-200' :
+                      'bg-blue-100 text-blue-800 border-blue-200'
                 }
               >
                 {occurrence.status}
@@ -118,7 +115,7 @@ const OccurrenceDetail = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-gray-700">{occurrence.description}</p>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center gap-3">
                     <MapPin className="h-5 w-5 text-gray-400" />
@@ -127,7 +124,7 @@ const OccurrenceDetail = () => {
                       <p className="font-medium text-gray-900">{occurrence.room}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <User className="h-5 w-5 text-gray-400" />
                     <div>
@@ -135,7 +132,7 @@ const OccurrenceDetail = () => {
                       <p className="font-medium text-gray-900">{occurrence.assignee}</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <Clock className="h-5 w-5 text-gray-400" />
                     <div>
@@ -143,7 +140,7 @@ const OccurrenceDetail = () => {
                       <p className="font-medium text-gray-900">{occurrence.estimatedDuration} minutes</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-3">
                     <Calendar className="h-5 w-5 text-gray-400" />
                     <div>
@@ -177,7 +174,7 @@ const OccurrenceDetail = () => {
                         placeholder="30"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Add Photo
@@ -188,7 +185,7 @@ const OccurrenceDetail = () => {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Comments (optional)
@@ -200,8 +197,8 @@ const OccurrenceDetail = () => {
                       rows={3}
                     />
                   </div>
-                  
-                  <Button 
+
+                  <Button
                     onClick={handleComplete}
                     className="w-full bg-green-600 hover:bg-green-700 text-white"
                   >
@@ -251,27 +248,27 @@ const OccurrenceDetail = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button 
+                <Button
                   onClick={handleReschedule}
-                  variant="outline" 
+                  variant="outline"
                   className="w-full border-gray-200 hover:bg-gray-50"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
                   Reschedule
                 </Button>
-                
-                <Button 
+
+                <Button
                   onClick={handleReassign}
-                  variant="outline" 
+                  variant="outline"
                   className="w-full border-gray-200 hover:bg-gray-50"
                 >
                   <User className="h-4 w-4 mr-2" />
                   Reassign
                 </Button>
-                
-                <Button 
+
+                <Button
                   onClick={handleSkip}
-                  variant="outline" 
+                  variant="outline"
                   className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
                 >
                   Skip This Time
@@ -281,9 +278,7 @@ const OccurrenceDetail = () => {
           </div>
         </div>
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

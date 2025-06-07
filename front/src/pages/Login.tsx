@@ -61,6 +61,8 @@ const Login = () => {
       await login({ email, password });
     } catch (error: any) {
       setErrors({ general: error.message });
+      // Afficher une alerte pour l'erreur
+      alert(error.message || 'Invalid email or password.');
     } finally {
       setIsLoading(false);
     }

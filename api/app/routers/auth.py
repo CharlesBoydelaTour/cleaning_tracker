@@ -7,9 +7,12 @@ from app.schemas.auth import (
     RefreshToken,
     UserResponse,
 )
+from fastapi import HTTPException
 from app.core.security import get_current_user
 from app.services.auth_service import AuthService
 from app.core.exceptions import InvalidInput
+from app.core.supabase_client import supabase_admin # Assurez-vous que supabase_admin est importé
+from fastapi.responses import Response
 from typing import Dict, Any
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -80,12 +83,17 @@ async def resend_verification_email_endpoint(email: str):
     return await AuthService.resend_verification_email(email)
 
 
-@router.delete("/me", summary="Supprime le compte de l'utilisateur connecté")
-async def delete_current_user(current_user=Depends(get_current_user)):
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_current_user(current_user: Dict[str, Any] = Depends(get_current_user)):
     """
-    Supprime l'utilisateur en cours (self-delete).
+    Supprimer le compte de l'utilisateur actuellement authentifié.
     """
-    # current_user peut être un dict ou un objet selon votre implémentation
-    user_id = getattr(current_user, "id", None) or current_user.get("id")
-    await AuthService.delete_user(user_id)
-    return {"message": "Utilisateur supprimé"}
+    user_id_to_delete = current_user.get("id")
+    if not user_id_to_delete:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Impossible de récupérer l'ID de l'utilisateur."
+        )
+
+    # La méthode delete_user lève maintenant des HTTPException directement
+    await AuthService.delete_user(user_id_to_delete, supabase_admin)

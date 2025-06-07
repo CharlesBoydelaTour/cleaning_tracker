@@ -7,8 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { authService } from '@/services/auth.service';
 import { useAuth } from '@/contexts/AuthContext';
@@ -108,9 +107,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-
+    <AppLayout activeHousehold={activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="max-w-2xl space-y-6">
           <div>
@@ -376,9 +373,7 @@ const Profile = () => {
           </Card>
         </div>
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

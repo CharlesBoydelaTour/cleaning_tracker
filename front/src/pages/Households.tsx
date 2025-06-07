@@ -4,8 +4,7 @@ import { Home, Users, Plus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 import { Link } from 'react-router-dom';
 
 // Mock data
@@ -36,9 +35,7 @@ const Households = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-      
+    <AppLayout activeHousehold={activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">My Households</h1>
@@ -62,10 +59,10 @@ const Households = () => {
                         {household.name}
                       </CardTitle>
                       <div className="flex items-center gap-2 mt-1">
-                        <Badge 
+                        <Badge
                           variant={household.role === 'Admin' ? 'default' : 'secondary'}
-                          className={household.role === 'Admin' 
-                            ? 'bg-blue-100 text-blue-800 border-blue-200' 
+                          className={household.role === 'Admin'
+                            ? 'bg-blue-100 text-blue-800 border-blue-200'
                             : 'bg-gray-100 text-gray-700 border-gray-200'
                           }
                         >
@@ -86,7 +83,7 @@ const Households = () => {
                   <Users className="h-4 w-4" />
                   <span>{household.memberCount} members</span>
                 </div>
-                
+
                 <div className="flex gap-2">
                   {!household.isActive && (
                     <Button
@@ -122,9 +119,7 @@ const Households = () => {
           </div>
         )}
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

@@ -1,15 +1,30 @@
 
-import { Home, Calendar, BarChart3, User, Settings } from "lucide-react";
+import { Home, Calendar, BarChart3, User, Settings, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+  SidebarHeader,
+} from "@/components/ui/sidebar";
+import { useLocation } from "react-router-dom";
 
 const Navigation = () => {
+  const location = useLocation();
+
   const navItems = [
-    { icon: Home, label: "Home", path: "/", active: true },
-    { icon: Calendar, label: "Calendar", path: "/calendar", active: false },
-    { icon: BarChart3, label: "Stats", path: "/stats", active: false },
-    { icon: User, label: "Profile", path: "/profile", active: false },
-    { icon: Settings, label: "Settings", path: "/settings", active: false },
+    { icon: Home, label: "Home", path: "/", active: location.pathname === "/" },
+    { icon: Calendar, label: "Calendar", path: "/calendar", active: location.pathname === "/calendar" },
+    { icon: BarChart3, label: "Stats", path: "/stats", active: location.pathname === "/stats" },
+    { icon: User, label: "Profile", path: "/profile", active: location.pathname === "/profile" },
+    { icon: Settings, label: "Settings", path: "/settings", active: location.pathname === "/settings" },
   ];
 
   return (
@@ -37,55 +52,69 @@ const Navigation = () => {
         </div>
       </nav>
 
-      {/* Desktop Side Navigation */}
-      <nav className="hidden md:flex fixed left-0 top-16 bottom-0 w-64 bg-white border-r border-gray-200 z-40">
-        <div className="flex flex-col w-full p-4 space-y-2">
-          <div className="mb-4">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Navigation
-            </h2>
+      {/* Desktop Collapsible Sidebar */}
+      <Sidebar variant="inset" className="hidden md:flex">
+        <SidebarHeader className="border-b border-sidebar-border">
+          <div className="flex items-center gap-2 px-2 py-1">
+            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
+              <Home className="size-4" />
+            </div>
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">HomeChores</span>
+              <span className="truncate text-xs text-sidebar-muted-foreground">Navigation</span>
+            </div>
           </div>
-          
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Button
-                key={item.path}
-                variant={item.active ? "secondary" : "ghost"}
-                className={cn(
-                  "w-full justify-start gap-3 h-10",
-                  item.active 
-                    ? "bg-blue-50 text-blue-700 border-blue-200" 
-                    : "text-gray-600 hover:bg-gray-50"
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                {item.label}
-              </Button>
-            );
-          })}
-          
-          <div className="pt-4 mt-4 border-t border-gray-200">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Quick Actions
-            </h3>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-3 h-10 border-gray-200 hover:bg-gray-50"
-            >
-              <Home className="h-5 w-5" />
-              Create Task
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start gap-3 h-10 mt-2 border-gray-200 hover:bg-gray-50"
-            >
-              <Calendar className="h-5 w-5" />
-              Add Room
-            </Button>
-          </div>
-        </div>
-      </nav>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={item.active}
+                        tooltip={item.label}
+                      >
+                        <a href={item.path}>
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarSeparator />
+
+          <SidebarGroup>
+            <SidebarGroupLabel>Quick Actions</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Create Task">
+                    <Plus className="h-4 w-4" />
+                    <span>Create Task</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton tooltip="Add Room">
+                    <Plus className="h-4 w-4" />
+                    <span>Add Room</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
     </>
   );
 };

@@ -5,6 +5,7 @@ from app.core.security import create_access_token, create_refresh_token
 from app.schemas.auth import UserSignup, UserLogin, AuthResponse, UserResponse, Token
 from app.core.supabase_client import supabase_admin
 from app.core.logging import get_logger, with_context
+from gotrue.errors import AuthApiError
 
 logger = get_logger(__name__)
 
@@ -151,7 +152,7 @@ class AuthService:
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(
+            logger.warning(
                 "Erreur inattendue lors de la connexion",
                 extra=with_context(
                     email=user_credentials.email, error_type=type(e).__name__
@@ -464,46 +465,55 @@ class AuthService:
             )
 
     @staticmethod
-    async def delete_user(user_id: str) -> Dict[str, str]:
+    async def delete_user(user_id: str, supabase_admin_client) -> bool:
         """
-        Supprime l'utilisateur identifié par `user_id` via l'API admin Supabase.
-        Lève une HTTPException(400) en cas d'erreur.
+        Supprimer un utilisateur de Supabase Auth.
 
         Args:
-            user_id: ID de l'utilisateur à supprimer
+            user_id: L'identifiant UUID de l'utilisateur à supprimer
+            supabase_admin_client: Le client admin Supabase
 
         Returns:
-            Dict: Message de confirmation
+            bool: True si la suppression a réussi
 
         Raises:
             HTTPException: Si la suppression échoue
         """
+        logger.info(
+            "Tentative de suppression d'utilisateur",
+            extra=with_context(user_id=user_id),
+        )
+
         try:
+            # La méthode delete_user du client Supabase admin ne retourne rien (None) en cas de succès
+            # et lève une AuthApiError en cas d'échec.
+            supabase_admin_client.auth.admin.delete_user(user_id)
+
             logger.info(
-                "Tentative de suppression de l'utilisateur",
+                "Utilisateur supprimé avec succès de Supabase",
                 extra=with_context(user_id=user_id),
             )
-            # Supprimer l'utilisateur avec Supabase Admin
-            response = supabase_admin.auth.admin.delete_user(user_id)
+            return True
 
-            if response.error:
-                logger.error(
-                    "Échec de la suppression de l'utilisateur",
-                    extra=with_context(user_id=user_id, error=response.error.message),
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Erreur lors de la suppression de l'utilisateur: {response.error.message}",
-                )
-
-            return {"message": "Utilisateur supprimé avec succès"}
+        except AuthApiError as e:
+            logger.error(
+                "Erreur API Supabase lors de la suppression de l'utilisateur",
+                extra=with_context(user_id=user_id, error_type=type(e).__name__),
+                exc_info=True,
+            )
+            # Utiliser str(e) au lieu de e.message qui pourrait ne pas exister
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Échec de la suppression de l'utilisateur : {str(e)}",
+            )
         except Exception as e:
             logger.error(
-                "Erreur inattendue lors de la suppression de l'utilisateur",
+                "Erreur inattendue lors de la tentative de suppression de l'utilisateur",
                 extra=with_context(user_id=user_id, error_type=type(e).__name__),
                 exc_info=True,
             )
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Erreur lors de la suppression de l'utilisateur: {str(e)}",
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erreur inattendue lors de la suppression de l'utilisateur : {str(e)}",
             )
+

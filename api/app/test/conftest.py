@@ -543,11 +543,12 @@ def mock_supabase_admin(mocker):
         )
     )
 
-    mock.auth.admin.delete_user.return_value = MagicMock(error=None)
+    mock.auth.admin.delete_user.return_value = None  # Succès = retourne None
 
     # Patch du client admin
     mocker.patch("app.core.supabase_client.supabase_admin", mock)
     mocker.patch("app.services.auth_service.supabase_admin", mock)
+    mocker.patch("app.routers.auth.supabase_admin", mock)
 
     return mock
 

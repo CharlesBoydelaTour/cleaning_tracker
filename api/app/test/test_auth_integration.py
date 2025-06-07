@@ -296,14 +296,21 @@ class TestAuthEndpoints:
         mock_supabase_admin
     ):
         """Test de suppression d'utilisateur réussie"""
+        # Configurer le mock pour simuler un succès (retourne None)
+        mock_supabase_admin.auth.admin.delete_user.return_value = None
+        
         response = await async_client.delete("/auth/me", headers=auth_headers)
         
-        assert response.status_code == 200
-        data = response.json()
-        assert data["message"] == "Utilisateur supprimé"
+        # En cas de suppression réussie, l'endpoint doit retourner HTTP 204 No Content
+        assert response.status_code == 204
         
-        # Vérifier que delete_user a été appelé avec le bon ID
-        mock_supabase_admin.auth.admin.delete_user.assert_called_once()
+        # Une réponse 204 ne doit pas avoir de corps
+        assert not response.content # Vérifie que le corps est vide
+
+        # Vérifier que la méthode delete_user du client admin Supabase a été appelée une fois
+        # avec le bon ID utilisateur provenant de la fixture mock_user.
+        mock_supabase_admin.auth.admin.delete_user.assert_called_once_with(mock_user["id"])
+        mock_supabase_admin.auth.admin.delete_user.assert_called_once_with(mock_user["id"])
     
     async def test_delete_user_without_auth(
         self,

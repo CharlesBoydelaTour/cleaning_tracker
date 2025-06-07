@@ -8,16 +8,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import AppLayout from '@/components/AppLayout';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
 const TaskForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const isEdit = Boolean(id);
-  
+
   const [formData, setFormData] = useState({
     title: isEdit ? 'Vacuum living room' : '',
     description: isEdit ? 'Weekly deep clean of the living room carpet' : '',
@@ -25,7 +24,7 @@ const TaskForm = () => {
     estimatedDuration: isEdit ? 30 : '',
     recurrence: isEdit ? 'weekly' : 'once'
   });
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [activeHousehold] = useState("The Smith Family");
 
@@ -53,17 +52,17 @@ const TaskForm = () => {
     try {
       // TODO: Replace with actual Supabase/FastAPI call
       console.log(isEdit ? 'Updating task:' : 'Creating task:', formData);
-      
+
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       toast({
         title: isEdit ? "Task updated" : "Task created",
         description: isEdit ? "Your task has been updated successfully." : "Your new task has been created.",
       });
-      
+
       navigate('/tasks');
-      
+
     } catch (error) {
       toast({
         title: "Error",
@@ -76,9 +75,7 @@ const TaskForm = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-      
+    <AppLayout activeHousehold={activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center gap-4 mb-6">
           <Link to="/tasks">
@@ -137,8 +134,8 @@ const TaskForm = () => {
                     <Label className="text-sm font-medium text-gray-700">
                       Room *
                     </Label>
-                    <Select 
-                      value={formData.room} 
+                    <Select
+                      value={formData.room}
                       onValueChange={(value) => setFormData({ ...formData, room: value })}
                     >
                       <SelectTrigger>
@@ -180,8 +177,8 @@ const TaskForm = () => {
                   <Label className="text-sm font-medium text-gray-700">
                     Recurrence *
                   </Label>
-                  <Select 
-                    value={formData.recurrence} 
+                  <Select
+                    value={formData.recurrence}
                     onValueChange={(value) => setFormData({ ...formData, recurrence: value })}
                   >
                     <SelectTrigger>
@@ -207,9 +204,9 @@ const TaskForm = () => {
                       <p className="text-sm text-blue-700">
                         This task will occur approximately {
                           formData.recurrence === 'daily' ? '30 times' :
-                          formData.recurrence === 'weekly' ? '4-5 times' :
-                          formData.recurrence === 'biweekly' ? '8-9 times' :
-                          formData.recurrence === 'monthly' ? '1 time' : 'X times'
+                            formData.recurrence === 'weekly' ? '4-5 times' :
+                              formData.recurrence === 'biweekly' ? '8-9 times' :
+                                formData.recurrence === 'monthly' ? '1 time' : 'X times'
                         } in the next 30 days.
                       </p>
                     </CardContent>
@@ -245,9 +242,7 @@ const TaskForm = () => {
           </Card>
         </div>
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 

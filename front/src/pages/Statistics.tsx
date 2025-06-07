@@ -5,8 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import Header from '@/components/Header';
-import Navigation from '@/components/Navigation';
+import AppLayout from '@/components/AppLayout';
 
 const Statistics = () => {
   const [period, setPeriod] = useState('week');
@@ -42,9 +41,7 @@ const Statistics = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header activeHousehold={activeHousehold} />
-      
+    <AppLayout activeHousehold={activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -54,7 +51,7 @@ const Statistics = () => {
             </h1>
             <p className="text-gray-600">Track your household's performance and progress</p>
           </div>
-          
+
           <div className="flex items-center gap-2">
             <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger className="w-32">
@@ -66,7 +63,7 @@ const Statistics = () => {
                 <SelectItem value="year">This Year</SelectItem>
               </SelectContent>
             </Select>
-            
+
             <Button variant="outline" className="border-gray-200 hover:bg-gray-50">
               <Download className="h-4 w-4 mr-2" />
               Export
@@ -163,9 +160,9 @@ const Statistics = () => {
                       </p>
                     </div>
                   </div>
-                  <Progress 
-                    value={(member.completed / (member.completed + member.overdue)) * 100} 
-                    className="h-2" 
+                  <Progress
+                    value={(member.completed / (member.completed + member.overdue)) * 100}
+                    className="h-2"
                   />
                 </div>
               ))}
@@ -223,7 +220,7 @@ const Statistics = () => {
                     {stats.recentTasks.map((task, index) => {
                       const variance = task.duration - task.estimated;
                       const variancePercent = Math.round((variance / task.estimated) * 100);
-                      
+
                       return (
                         <tr key={index} className="border-b border-gray-100">
                           <td className="py-3 text-sm text-gray-900">{task.title}</td>
@@ -255,17 +252,17 @@ const Statistics = () => {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
-              <Button 
+              <Button
                 onClick={() => handleExport('csv')}
-                variant="outline" 
+                variant="outline"
                 className="border-gray-200 hover:bg-gray-50"
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export as CSV
               </Button>
-              <Button 
+              <Button
                 onClick={() => handleExport('pdf')}
-                variant="outline" 
+                variant="outline"
                 className="border-gray-200 hover:bg-gray-50"
               >
                 <Download className="h-4 w-4 mr-2" />
@@ -275,9 +272,7 @@ const Statistics = () => {
           </CardContent>
         </Card>
       </main>
-
-      <Navigation />
-    </div>
+    </AppLayout>
   );
 };
 
