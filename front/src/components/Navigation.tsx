@@ -1,5 +1,5 @@
 
-import { Home, Calendar, BarChart3, User, Settings, Plus } from "lucide-react";
+import { Home, Calendar, BarChart3, User, Settings, Plus, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -14,13 +14,15 @@ import {
   SidebarSeparator,
   SidebarHeader,
 } from "@/components/ui/sidebar";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const navItems = [
-    { icon: Home, label: "Home", path: "/", active: location.pathname === "/" },
+    { icon: Home, label: "Home", path: "/home", active: location.pathname === "/home" },
+    { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", active: location.pathname === "/dashboard" },
     { icon: Calendar, label: "Calendar", path: "/calendar", active: location.pathname === "/calendar" },
     { icon: BarChart3, label: "Stats", path: "/stats", active: location.pathname === "/stats" },
     { icon: User, label: "Profile", path: "/profile", active: location.pathname === "/profile" },
@@ -43,6 +45,7 @@ const Navigation = () => {
                   "flex flex-col items-center justify-center h-12 w-12 p-0 gap-1",
                   item.active ? "text-blue-600" : "text-gray-400"
                 )}
+                onClick={() => navigate(item.path)}
               >
                 <Icon className="h-5 w-5" />
                 <span className="text-xs">{item.label}</span>
@@ -80,10 +83,10 @@ const Navigation = () => {
                         isActive={item.active}
                         tooltip={item.label}
                       >
-                        <a href={item.path}>
+                        <button onClick={() => navigate(item.path)}>
                           <Icon className="h-4 w-4" />
                           <span>{item.label}</span>
-                        </a>
+                        </button>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

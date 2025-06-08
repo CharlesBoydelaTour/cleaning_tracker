@@ -8,6 +8,8 @@ import { PrivateRoute } from "@/components/PrivateRoute";
 
 // Pages
 import Index from "./pages/Index";
+import Dashboard from "./pages/Dashboard";
+import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
@@ -40,6 +42,16 @@ const App = () => (
             <Route path="/" element={
               <PrivateRoute>
                 <Index />
+              </PrivateRoute>
+            } />
+            <Route path="/home" element={
+              <PrivateRoute>
+                <Home />
+              </PrivateRoute>
+            } />
+            <Route path="/dashboard" element={
+              <PrivateRoute>
+                <Dashboard />
               </PrivateRoute>
             } />
             <Route path="/households" element={
