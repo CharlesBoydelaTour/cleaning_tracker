@@ -13,10 +13,91 @@ import { useTodayTasks } from '@/hooks/use-task-occurrences';
 import { useAuth } from '@/hooks/use-auth';
 import NewTaskModal from '@/components/NewTaskModal';
 import { taskService } from '@/services/api';
+import WelcomeScreen from '@/components/WelcomeScreen';
+import CreateHouseholdModal from '@/components/CreateHouseholdModal';
 
 const Index = () => {
-  const { isServerDown } = useAuth();
-  const { householdId, householdName, loading: householdLoading } = useCurrentHousehold();
+  const { user, loading: authLoading, isServerDown } = useAuth(); // Ajout de user et authLoading
+  const {
+    householdId,
+    householdName,
+    loading: householdLoading,
+    currentHousehold,
+    error: householdError,
+    refetch: refetchHousehold // Ajout de refetchHousehold
+  } = useCurrentHousehold();
+
+  // Appeler le hook useTodayTasks, il devrait gérer en interne un householdId nul.
+  // Ses états (tasksLoading, tasksError) ne seront pertinents que si householdId est valide.
+  const tasksHookResult = useTodayTasks(householdId);
+
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  const [showCreateHouseholdModal, setShowCreateHouseholdModal] = useState(false);
+
+  // 1. Gérer le chargement de l'authentification
+  if (authLoading) {
+    return (
+      <AppLayout activeHousehold="Chargement...">
+        <div className="container mx-auto px-4 py-6 text-center">Chargement des informations utilisateur...</div>
+      </AppLayout>
+    );
+  }
+
+  // 2. Gérer le cas où l'utilisateur n'est pas authentifié (devrait être géré par le routeur en amont)
+  if (!user) {
+    return (
+      <AppLayout activeHousehold="Connexion requise">
+        <div className="container mx-auto px-4 py-6 text-center">Veuillez vous connecter pour accéder à cette page.</div>
+      </AppLayout>
+    );
+  }
+
+  // 3. Gérer le chargement du ménage
+  if (householdLoading) {
+    return (
+      <AppLayout activeHousehold="Chargement...">
+        <div className="container mx-auto px-4 py-6 text-center">Chargement des informations du foyer...</div>
+      </AppLayout>
+    );
+  }
+
+  // 4. Gérer l'erreur de chargement du ménage
+  if (householdError) {
+    return (
+      <AppLayout activeHousehold="Erreur">
+        <div className="container mx-auto px-4 py-6 text-center">
+          <p className="text-red-600">Erreur lors du chargement du foyer : {householdError}</p>
+          <Button onClick={() => refetchHousehold && refetchHousehold()} className="mt-2">
+            Réessayer
+          </Button>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // 5. Si l'utilisateur est authentifié, le chargement du ménage est terminé, sans erreur, MAIS aucun ménage n'est trouvé
+  if (!currentHousehold) {
+    return (
+      <AppLayout activeHousehold="Bienvenue">
+        <WelcomeScreen onCreateHousehold={() => setShowCreateHouseholdModal(true)} />
+        <CreateHouseholdModal
+          open={showCreateHouseholdModal}
+          onOpenChange={setShowCreateHouseholdModal}
+          onSuccess={() => {
+            setShowCreateHouseholdModal(false);
+            if (refetchHousehold) {
+              refetchHousehold();
+            } else {
+              window.location.reload(); // Fallback si refetchHousehold n'est pas dispo
+            }
+          }}
+        />
+      </AppLayout>
+    );
+  }
+
+  // À ce stade : utilisateur authentifié, ménage chargé avec succès (currentHousehold et householdId sont valides)
+  // Nous pouvons maintenant utiliser les résultats de tasksHookResult en toute sécurité.
   const {
     tasks: todayTasks,
     loading: tasksLoading,
@@ -26,12 +107,42 @@ const Index = () => {
     completeTask,
     snoozeTask,
     skipTask,
-    refetch
-  } = useTodayTasks(householdId);
+    refetch: refetchTasks
+  } = tasksHookResult;
 
-  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
+  // 6. Gérer le chargement des tâches (maintenant que nous savons qu'il y a un ménage)
+  if (tasksLoading) {
+    return (
+      <AppLayout activeHousehold={householdName || "Chargement..."}>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Chargement des tâches...</p>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
-  const loading = householdLoading || tasksLoading;
+  // 7. Gérer l'erreur de chargement des tâches
+  if (tasksError) {
+    return (
+      <AppLayout activeHousehold={householdName || "Erreur"}>
+        <div className="container mx-auto px-4 py-6">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <p className="text-red-600">Erreur lors du chargement des tâches : {tasksError}</p>
+              <Button onClick={refetchTasks} className="mt-2">
+                Réessayer
+              </Button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   // Helper function to convert API task to TaskCard format
   const convertTaskForCard = (task: any) => ({
@@ -49,66 +160,38 @@ const Index = () => {
       minute: '2-digit'
     }) : '',
     completedAt: task.status === 'done' ? 'Terminé' : undefined,
-    recurrence: 'Récurrent'
+    recurrence: 'Récurrent' // Placeholder, adjust as needed
   });
 
   const handleCreateTask = async (taskData: any) => {
-    console.log('handleCreateTask appelé avec:', taskData); // Debug
+    if (!householdId) {
+      alert("Aucun foyer sélectionné pour créer la tâche.");
+      return;
+    }
+    console.log('handleCreateTask appelé avec:', taskData);
     try {
-      console.log('Appel de taskService.createTask...'); // Debug
-      const result = await taskService.createTask(householdId || '', taskData);
-      console.log('Résultat de la création:', result); // Debug
-
-      // Rafraîchir les données
-      await refetch();
-      console.log('Données rafraîchies'); // Debug
-    } catch (error) {
+      console.log('Appel de taskService.createTask...');
+      const result = await taskService.createTask(householdId, taskData); // householdId est sûr ici
+      console.log('Résultat de la création:', result);
+      await refetchTasks(); // Utiliser refetchTasks de tasksHookResult
+      console.log('Données rafraîchies');
+    } catch (error: any) {
       console.error('Erreur lors de la création de la tâche:', error);
-      // Afficher une notification d'erreur
       alert('Erreur lors de la création de la tâche: ' + error.message);
     }
   };
 
-  if (loading) {
-    return (
-      <AppLayout activeHousehold={householdName || "Chargement..."}>
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Chargement des tâches...</p>
-            </div>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  if (tasksError) {
-    return (
-      <AppLayout activeHousehold={householdName || "Erreur"}>
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <p className="text-red-600">Erreur lors du chargement des tâches</p>
-              <Button onClick={refetch} className="mt-2">
-                Réessayer
-              </Button>
-            </div>
-          </div>
-        </div>
-      </AppLayout>
-    );
-  }
-
-  // Calculate derived values from API data
   const completedTasks = tasksByStatus?.completed || [];
   const overdueTasks = tasksByStatus?.overdue || [];
   const todoTasks = tasksByStatus?.todo || [];
   const completionRate = todayStats ? todayStats.completionRate : 0;
 
+  // 8. Afficher le tableau de bord principal
   return (
     <AppLayout activeHousehold={householdName || "Foyer"}>
+      {/* ... Le reste de votre JSX pour le tableau de bord reste ici ... */}
+      {/* Assurez-vous d'utiliser les variables todayTasks, todayStats, etc. */}
+      {/* qui sont maintenant correctement conditionnées. */}
       <div className="container mx-auto px-4">
         <EmailVerificationBanner />
         <IntegrationStatus />
@@ -251,12 +334,12 @@ const Index = () => {
           </div>
         )}
 
-        {/* Empty state when no tasks at all */}
-        {!loading && todayTasks.length === 0 && (
+        {/* Empty state when no tasks at all for a valid household */}
+        {todayTasks.length === 0 && overdueTasks.length === 0 && todoTasks.length === 0 && completedTasks.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-xl font-medium mb-2">Aucune tâche pour aujourd'hui</h3>
-            <p className="text-sm mb-4">Profitez de votre journée libre !</p>
+            <p className="text-sm mb-4">Profitez de votre journée libre ou ajoutez de nouvelles tâches !</p>
             <Button
               className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setShowNewTaskModal(true)}
@@ -272,7 +355,7 @@ const Index = () => {
         isOpen={showNewTaskModal}
         onClose={() => setShowNewTaskModal(false)}
         onSubmit={handleCreateTask}
-        householdId={householdId || ''}
+        householdId={householdId || ''} // householdId est valide ici
       />
     </AppLayout>
   );

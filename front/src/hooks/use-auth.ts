@@ -17,7 +17,7 @@ export const useAuth = () => {
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
+        const token = localStorage.getItem('access_token');
         if (!token) {
           setLoading(false);
           return;
@@ -40,7 +40,8 @@ export const useAuth = () => {
             email_verified: true
           });
         } else {
-          localStorage.removeItem('auth_token');
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('refresh_token');
           setUser(null);
           setError('Session expirée, veuillez vous reconnecter');
         }
@@ -57,11 +58,12 @@ export const useAuth = () => {
       setLoading(true);
       setError(null);
       const response = await authService.login({ email, password });
-      localStorage.setItem('auth_token', response.access_token);
+      localStorage.setItem('access_token', response.tokens.access_token);
+      localStorage.setItem('refresh_token', response.tokens.refresh_token);
       setUser(response.user);
       
       // Vérifier si c'est le mode demo
-      if (response.access_token === 'demo-token') {
+      if (response.tokens.access_token === 'demo-token') {
         setIsServerDown(true);
         setError('Mode demo - Serveur indisponible');
       }
@@ -88,10 +90,11 @@ export const useAuth = () => {
       setLoading(true);
       setError(null);
       const response = await authService.register({ email, password });
-      localStorage.setItem('auth_token', response.access_token);
+      localStorage.setItem('access_token', response.tokens.access_token);
+      localStorage.setItem('refresh_token', response.tokens.refresh_token);
       setUser(response.user);
       
-      if (response.access_token === 'demo-token') {
+      if (response.tokens.access_token === 'demo-token') {
         setIsServerDown(true);
         setError('Mode demo - Serveur indisponible');
       }
@@ -113,7 +116,8 @@ export const useAuth = () => {
   };
 
   const logout = () => {
-    localStorage.removeItem('auth_token');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
     setUser(null);
     setError(null);
     setIsServerDown(false);

@@ -3,8 +3,9 @@ import { withRequestingUserId } from './api-helpers';
 import type { Household, HouseholdCreate, HouseholdMember, HouseholdMemberCreate, Room } from '@/types';
 
 export const householdsService = {
-  async getAll(): Promise<Household[]> {
-    const response = await apiClient.get<Household[]>('/households');
+  async getAll(userId?: string): Promise<Household[]> { // Accepter un userId optionnel
+    const params = userId ? { user_id: userId } : {}; // L'API attend 'user_id'
+    const response = await apiClient.get<Household[]>('/households', { params });
     return response.data;
   },
 

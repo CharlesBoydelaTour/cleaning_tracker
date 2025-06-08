@@ -10,7 +10,7 @@ const api = axios.create({
 
 // Intercepteur pour ajouter le token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
+  const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -33,7 +33,8 @@ api.interceptors.response.use(
     }
     
     if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -50,11 +51,15 @@ export const authService = {
       if (error.isServerDown) {
         // Mode demo pour développement
         return {
-          access_token: 'demo-token',
           user: {
             id: 'demo-user-id',
             email: credentials.email,
             email_verified: true
+          },
+          tokens: {
+            access_token: 'demo-token',
+            refresh_token: 'demo-refresh-token',
+            token_type: 'bearer'
           }
         };
       }
@@ -70,11 +75,15 @@ export const authService = {
       if (error.isServerDown) {
         // Mode demo pour développement
         return {
-          access_token: 'demo-token',
           user: {
             id: 'demo-user-id',
             email: credentials.email,
             email_verified: true
+          },
+          tokens: {
+            access_token: 'demo-token',
+            refresh_token: 'demo-refresh-token',
+            token_type: 'bearer'
           }
         };
       }
@@ -226,9 +235,9 @@ async createTask(householdId: string, taskData: any) {
     };
     
     console.log('Données de la requête:', requestData);
-    console.log('URL de la requête:', `${API_BASE_URL}/households/${householdId}/task-definitions/`);
+    console.log('URL de la requête:', `${API_BASE_URL}/households/${householdId}/task-definitions`);
     
-    const response = await api.post(`/households/${householdId}/task-definitions/`, requestData);
+    const response = await api.post(`/households/${householdId}/task-definitions`, requestData);
     
     console.log('Réponse de l\'API:', response.data);
     return response.data;

@@ -42,9 +42,11 @@ async def create_user(
 
         user_data = await conn.fetchrow(
             """
-            SELECT id, email, full_name, hashed_password, created_at, updated_at, 
-                   email_confirmed_at, is_active, is_superuser
-            FROM users
+            SELECT id, email, raw_user_meta_data->>'full_name' as full_name, 
+                   created_at, updated_at, email_confirmed_at,
+                   raw_app_meta_data->>'is_active'::boolean as is_active,
+                   raw_app_meta_data->>'is_superuser'::boolean as is_superuser
+            FROM auth.users
             WHERE id = $1
             """,
             user_id
@@ -681,7 +683,7 @@ async def create_household(
 
         if created_by_user_id:
             user_exists = await conn.fetchval(
-                "SELECT 1 FROM users WHERE id = $1",
+                "SELECT 1 FROM auth.users WHERE id = $1",
                 created_by_user_id
             )
             
