@@ -29,6 +29,13 @@ export interface TaskOccurrence {
   assigned_user_email?: string;
 }
 
+export interface TaskOccurrenceWithDefinition extends TaskOccurrence {
+  definition_title: string;
+  definition_description?: string;
+  room_name?: string;
+  assigned_user_name?: string;
+}
+
 export interface TaskCompletion {
   occurrence_id: string;
   completed_by: string;

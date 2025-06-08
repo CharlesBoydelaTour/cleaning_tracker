@@ -26,9 +26,12 @@ interface Task {
 
 interface TaskCardProps {
   task: Task;
+  onComplete?: (taskId: number, data?: { duration_minutes?: number; comment?: string; photo_url?: string }) => Promise<void>;
+  onSnooze?: (taskId: number, snoozedUntil: string) => Promise<void>;
+  onSkip?: (taskId: number, reason?: string) => Promise<void>;
 }
 
-const TaskCard = ({ task }: TaskCardProps) => {
+const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
   const getStatusIcon = () => {
     switch (task.status) {
       case "completed":
@@ -45,32 +48,53 @@ const TaskCard = ({ task }: TaskCardProps) => {
       case "completed":
         return (
           <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
-            Completed
+            Terminé
           </Badge>
         );
       case "overdue":
         return (
           <Badge variant="destructive" className="bg-orange-100 text-orange-800 border-orange-200">
-            Overdue
+            En retard
           </Badge>
         );
       default:
         return (
           <Badge variant="outline" className="border-gray-200 text-gray-600">
-            To Do
+            À faire
           </Badge>
         );
     }
   };
 
-  const handleComplete = () => {
-    console.log(`Marking task ${task.id} as complete`);
-    // Implementation for completing task
+  const handleComplete = async () => {
+    if (onComplete) {
+      await onComplete(task.id, {});
+    } else {
+      console.log(`Marking task ${task.id} as complete`);
+    }
   };
 
   const handleReschedule = () => {
     console.log(`Rescheduling task ${task.id}`);
     // Implementation for rescheduling task
+  };
+
+  const handleSnooze = async () => {
+    if (onSnooze) {
+      // Reporter d'1 heure par défaut
+      const snoozeUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      await onSnooze(task.id, snoozeUntil);
+    } else {
+      console.log(`Snoozing task ${task.id}`);
+    }
+  };
+
+  const handleSkip = async () => {
+    if (onSkip) {
+      await onSkip(task.id, 'Tâche ignorée');
+    } else {
+      console.log(`Skipping task ${task.id}`);
+    }
   };
 
   return (
@@ -98,7 +122,7 @@ const TaskCard = ({ task }: TaskCardProps) => {
                 </h3>
                 <p className="text-sm text-gray-600 mb-2">{task.description}</p>
               </div>
-              
+
               {/* Actions Menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -109,14 +133,24 @@ const TaskCard = ({ task }: TaskCardProps) => {
                 <DropdownMenuContent align="end">
                   {task.status !== "completed" && (
                     <DropdownMenuItem onClick={handleComplete}>
-                      Mark Complete
+                      Marquer comme terminé
+                    </DropdownMenuItem>
+                  )}
+                  {task.status !== "completed" && onSnooze && (
+                    <DropdownMenuItem onClick={handleSnooze}>
+                      Reporter
+                    </DropdownMenuItem>
+                  )}
+                  {task.status !== "completed" && onSkip && (
+                    <DropdownMenuItem onClick={handleSkip}>
+                      Ignorer
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem onClick={handleReschedule}>
-                    Reschedule
+                    Reprogrammer
                   </DropdownMenuItem>
-                  <DropdownMenuItem>Reassign</DropdownMenuItem>
-                  <DropdownMenuItem>Edit Task</DropdownMenuItem>
+                  <DropdownMenuItem>Réassigner</DropdownMenuItem>
+                  <DropdownMenuItem>Modifier la tâche</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -127,16 +161,16 @@ const TaskCard = ({ task }: TaskCardProps) => {
                 <Calendar className="h-4 w-4" />
                 <span>{task.status === "completed" && task.completedAt ? task.completedAt : task.dueTime}</span>
               </div>
-              
+
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
                 <span>{task.estimatedDuration} min</span>
               </div>
-              
+
               <Badge variant="outline" className="border-gray-200 text-gray-600">
                 {task.room}
               </Badge>
-              
+
               <span className="text-gray-400">•</span>
               <span>{task.assignee}</span>
             </div>
@@ -144,33 +178,55 @@ const TaskCard = ({ task }: TaskCardProps) => {
             {/* Status and Actions */}
             <div className="flex items-center justify-between mt-3">
               {getStatusBadge()}
-              
+
               {task.status === "todo" && (
-                <Button 
-                  size="sm" 
-                  onClick={handleComplete}
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  Complete
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    onClick={handleComplete}
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Terminer
+                  </Button>
+                  {onSnooze && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSnooze}
+                      className="border-gray-200 hover:bg-gray-50"
+                    >
+                      Reporter
+                    </Button>
+                  )}
+                </div>
               )}
-              
+
               {task.status === "overdue" && (
                 <div className="flex gap-2">
-                  <Button 
-                    size="sm" 
+                  {onSkip && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSkip}
+                      className="border-yellow-200 text-yellow-700 hover:bg-yellow-50"
+                    >
+                      Ignorer
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
                     variant="outline"
                     onClick={handleReschedule}
                     className="border-gray-200 hover:bg-gray-50"
                   >
-                    Reschedule
+                    Reprogrammer
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={handleComplete}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    Complete
+                    Terminer
                   </Button>
                 </div>
               )}
