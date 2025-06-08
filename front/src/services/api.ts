@@ -214,5 +214,39 @@ export const taskService = {
       }
       throw error;
     }
+  },
+
+async createTask(householdId: string, taskData: any) {
+  console.log('taskService.createTask appelé:', { householdId, taskData });
+  
+  try {
+    const requestData = {
+      ...taskData,
+      household_id: householdId
+    };
+    
+    console.log('Données de la requête:', requestData);
+    console.log('URL de la requête:', `${API_BASE_URL}/households/${householdId}/task-definitions/`);
+    
+    const response = await api.post(`/households/${householdId}/task-definitions/`, requestData);
+    
+    console.log('Réponse de l\'API:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('Erreur dans createTask:', error);
+    
+    if (error.isServerDown) {
+      console.log('Mode demo activé');
+      // Mode demo
+      const demoResult = {
+        id: `demo-task-${Date.now()}`,
+        ...taskData,
+        created_at: new Date().toISOString()
+      };
+      console.log('Retour demo:', demoResult);
+      return demoResult;
+    }
+    throw error;
   }
+}
 };

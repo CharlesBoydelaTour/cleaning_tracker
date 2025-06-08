@@ -1,4 +1,4 @@
-
+import { useState } from "react";
 import { Calendar, BarChart3, Settings, Plus, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +10,9 @@ import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import IntegrationStatus from '@/components/IntegrationStatus';
 import { useCurrentHousehold } from '@/hooks/use-current-household';
 import { useTodayTasks } from '@/hooks/use-task-occurrences';
-import DemoBanner from '@/components/DemoBanner';
 import { useAuth } from '@/hooks/use-auth';
+import NewTaskModal from '@/components/NewTaskModal';
+import { taskService } from '@/services/api';
 
 const Index = () => {
   const { isServerDown } = useAuth();
@@ -27,6 +28,8 @@ const Index = () => {
     skipTask,
     refetch
   } = useTodayTasks(householdId);
+
+  const [showNewTaskModal, setShowNewTaskModal] = useState(false);
 
   const loading = householdLoading || tasksLoading;
 
@@ -46,8 +49,25 @@ const Index = () => {
       minute: '2-digit'
     }) : '',
     completedAt: task.status === 'done' ? 'Terminé' : undefined,
-    recurrence: 'Récurrent' // Placeholder - pourrait être amélioré avec la règle de récurrence
+    recurrence: 'Récurrent'
   });
+
+  const handleCreateTask = async (taskData: any) => {
+    console.log('handleCreateTask appelé avec:', taskData); // Debug
+    try {
+      console.log('Appel de taskService.createTask...'); // Debug
+      const result = await taskService.createTask(householdId || '', taskData);
+      console.log('Résultat de la création:', result); // Debug
+
+      // Rafraîchir les données
+      await refetch();
+      console.log('Données rafraîchies'); // Debug
+    } catch (error) {
+      console.error('Erreur lors de la création de la tâche:', error);
+      // Afficher une notification d'erreur
+      alert('Erreur lors de la création de la tâche: ' + error.message);
+    }
+  };
 
   if (loading) {
     return (
@@ -137,10 +157,14 @@ const Index = () => {
 
         {/* Quick Actions */}
         <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-          <Button className="flex-shrink-0 bg-blue-600 hover:bg-blue-700 text-white">
-            <Plus className="h-4 w-4 mr-2" />
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => setShowNewTaskModal(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
             Nouvelle tâche
           </Button>
+
           <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50">
             <Calendar className="h-4 w-4 mr-2" />
             Calendrier
@@ -172,7 +196,7 @@ const Index = () => {
                   task={convertTaskForCard(task)}
                   onComplete={() => completeTask(task.id, {})}
                   onSnooze={() => snoozeTask(task.id, new Date(Date.now() + 60 * 60 * 1000).toISOString())}
-                  onSkip={() => skipTask(task.id, 'Tâche ignorée depuis la page d\'accueil')}
+                  onSkip={() => skipTask(task.id, "Tâche ignorée depuis la page d'accueil")}
                 />
               ))}
             </div>
@@ -193,7 +217,7 @@ const Index = () => {
                   task={convertTaskForCard(task)}
                   onComplete={() => completeTask(task.id, {})}
                   onSnooze={() => snoozeTask(task.id, new Date(Date.now() + 60 * 60 * 1000).toISOString())}
-                  onSkip={() => skipTask(task.id, 'Tâche ignorée depuis la page d\'accueil')}
+                  onSkip={() => skipTask(task.id, "Tâche ignorée depuis la page d'accueil")}
                 />
               ))}
             </div>
@@ -233,13 +257,23 @@ const Index = () => {
             <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
             <h3 className="text-xl font-medium mb-2">Aucune tâche pour aujourd'hui</h3>
             <p className="text-sm mb-4">Profitez de votre journée libre !</p>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={() => setShowNewTaskModal(true)}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Ajouter une tâche
             </Button>
           </div>
         )}
       </main>
+
+      <NewTaskModal
+        isOpen={showNewTaskModal}
+        onClose={() => setShowNewTaskModal(false)}
+        onSubmit={handleCreateTask}
+        householdId={householdId || ''}
+      />
     </AppLayout>
   );
 };
