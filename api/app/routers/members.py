@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas.member import HouseholdMemberCreate, HouseholdMember, HouseholdMemberUpdate, HouseholdMemberInvite
-from app.services.member_service import invite_member_to_household # Assurez-vous d\'avoir cette fonction de service
+from app.schemas.member import HouseholdMemberCreate, HouseholdMember, HouseholdMemberUpdate, HouseholdMemberInvite # HouseholdMember est déjà importé
+from app.services.member_service import invite_member_to_household
 from app.core.database import (
     get_household_members,
     get_household_member,
@@ -17,7 +17,7 @@ from uuid import UUID
 router = APIRouter()
 
 
-@router.get("/{household_id}/members", response_model=List[HouseholdMember])
+@router.get("/{household_id}/members", response_model=List[HouseholdMember]) # Le response_model est déjà HouseholdMember
 async def list_household_members(
     household_id: UUID,
     db_pool: asyncpg.Pool = Depends(get_db_pool),

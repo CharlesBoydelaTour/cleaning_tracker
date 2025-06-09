@@ -19,9 +19,13 @@ class HouseholdMemberCreate(HouseholdMemberBase):  # Hérite maintenant directem
 class HouseholdMember(HouseholdMemberBase):
     id: UUID  # Ajout du champ id pour la réponse
     household_id: UUID  # Ajout du champ household_id pour la réponse
-    user_id: UUID
+    user_id: UUID  # Gardé pour référence interne si nécessaire
     role: Literal["admin", "member", "guest"] = "member"
-    model_config = {"from_attributes": True}  # Pas de strict ici
+    # Ces champs seront maintenant directement dans HouseholdMember grâce à la jointure SQL
+    user_full_name: Optional[str] = None
+    user_email: Optional[EmailStr] = None
+
+    model_config = {"from_attributes": True}
 
 
 class HouseholdMemberUpdate(BaseModel):
@@ -35,6 +39,7 @@ class HouseholdMemberInvite(BaseModel):
     role: str = "member"
 
 
-class HouseholdMemberWithUser(HouseholdMember):
-    user_email: Optional[EmailStr] = None
-    user_full_name: Optional[str] = None
+# HouseholdMemberWithUser n'est plus nécessaire si HouseholdMember contient directement les infos utilisateur
+# class HouseholdMemberWithUser(HouseholdMember):
+#     user_email: Optional[EmailStr] = None
+#     user_full_name: Optional[str] = None

@@ -7,9 +7,11 @@ export interface Household {
 export interface HouseholdMember {
   id: string;
   household_id: string;
-  user_id: string;
+  user_id: string; // Gardé pour référence interne si nécessaire
   role: 'admin' | 'member' | 'guest';
   joined_at?: string;
+  user_full_name?: string; // Ajouté
+  user_email?: string;     // Ajouté
 }
 
 export interface Room {

@@ -7,6 +7,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { roomsService } from '@/services/rooms.service';
+import { Room } from '@/types/household.types';
+import { membersService } from '@/services/members.service.ts';
+// Ajuster l'import pour HouseholdMember si les détails utilisateur sont maintenant inclus
+import { HouseholdMember } from '@/types/household.types';
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -57,7 +62,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
     description: '',
     room_id: '',
     estimated_minutes: 30,
-    assigned_to: 'auto', // ✅ Valeur par défaut non-vide
+    assigned_to: 'auto',
     recurrence_type: 'weekly',
     recurrence_days: [],
     start_date: new Date().toISOString().split('T')[0],
@@ -67,20 +72,22 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSuccess, setIsSuccess] = useState(false);
 
-  // Mock data - à remplacer par de vraies données de l'API
-  const rooms = [
-    { id: 'kitchen', name: 'Cuisine' },
-    { id: 'living-room', name: 'Salon' },
-    { id: 'bathroom', name: 'Salle de bain' },
-    { id: 'bedroom', name: 'Chambre' },
-    { id: 'office', name: 'Bureau' }
-  ];
+  // États pour les pièces
+  const [roomsList, setRoomsList] = useState<Room[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
 
-  const members = [
-    { id: 'user1', name: 'Moi', email: 'me@example.com' },
-    { id: 'user2', name: 'Marie Dupont', email: 'marie@example.com' },
-    { id: 'user3', name: 'Jean Martin', email: 'jean@example.com' }
-  ];
+  // États pour les membres
+  const [membersList, setMembersList] = useState<HouseholdMember[]>([]); // Utiliser HouseholdMember directement
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [membersError, setMembersError] = useState<string | null>(null);
+
+  // Supprimer les données mock pour members
+  // const members = [
+  //   { id: 'user1', name: 'Moi', email: 'me@example.com' },
+  //   { id: 'user2', name: 'Marie Dupont', email: 'marie@example.com' },
+  //   { id: 'user3', name: 'Jean Martin', email: 'jean@example.com' }
+  // ];
 
   useEffect(() => {
     if (isOpen) {
@@ -91,14 +98,55 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
         description: '',
         room_id: '',
         estimated_minutes: 30,
-        assigned_to: 'auto', // ✅ Valeur par défaut non-vide
+        assigned_to: 'auto',
         recurrence_type: 'weekly',
         recurrence_days: [],
         start_date: new Date().toISOString().split('T')[0],
         priority: 'medium'
       });
+
+      // Récupérer les pièces lorsque la modale s'ouvre et que householdId est disponible
+      if (householdId) {
+        const fetchRooms = async () => {
+          setRoomsLoading(true);
+          setRoomsError(null);
+          try {
+            const fetchedRooms = await roomsService.getAll(householdId);
+            setRoomsList(fetchedRooms);
+          } catch (error) {
+            console.error("Erreur lors de la récupération des pièces:", error);
+            setRoomsError("Impossible de charger les pièces. Veuillez réessayer.");
+          } finally {
+            setRoomsLoading(false);
+          }
+        };
+        fetchRooms();
+      } else {
+        setRoomsList([]);
+      }
+
+      // Récupérer les membres lorsque la modale s'ouvre et que householdId est disponible
+      if (householdId) {
+        const fetchMembers = async () => {
+          setMembersLoading(true);
+          setMembersError(null);
+          try {
+            const fetchedMembers = await membersService.getAll(householdId);
+            // Les membres devraient maintenant avoir user_full_name et user_email
+            setMembersList(fetchedMembers);
+          } catch (error) {
+            console.error("Erreur lors de la récupération des membres:", error);
+            setMembersError("Impossible de charger les membres. Veuillez réessayer.");
+          } finally {
+            setMembersLoading(false);
+          }
+        };
+        fetchMembers();
+      } else {
+        setMembersList([]); // Vider la liste si pas de householdId
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, householdId]);
 
   const handleInputChange = (field: keyof TaskFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -114,7 +162,8 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       title: template.title,
       description: template.description,
       estimated_minutes: template.duration,
-      room_id: rooms.find(r => r.name === template.room)?.id || ''
+      // Mettre à jour pour utiliser roomsList
+      room_id: roomsList.find(r => r.name === template.room)?.id || ''
     }));
     setCurrentStep(1);
   };
@@ -419,48 +468,54 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
           {currentStep === 2 && (
             <div className="space-y-6">
               <div>
-                <Label>Pièce *</Label>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
-                  {rooms.map((room) => (
-                    <Card
-                      key={room.id}
-                      className={`cursor-pointer transition-all ${formData.room_id === room.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'hover:border-gray-300'
-                        } ${errors.room_id ? 'border-red-500' : ''}`}
-                      onClick={() => handleInputChange('room_id', room.id)}
-                    >
-                      <CardContent className="p-3 text-center">
-                        <Home className="w-6 h-6 mx-auto mb-2 text-gray-600" />
-                        <span className="text-sm font-medium">{room.name}</span>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-                {errors.room_id && <p className="text-sm text-red-600 mt-1">{errors.room_id}</p>}
+                <Label htmlFor="room_id" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <Home className="inline mr-2 h-4 w-4" />Pièce
+                </Label>
+                {roomsLoading && <p className="text-sm text-gray-500 dark:text-gray-400">Chargement des pièces...</p>}
+                {roomsError && <p className="text-sm text-red-500">{roomsError}</p>}
+                {!roomsLoading && !roomsError && (
+                  <Select
+                    value={formData.room_id}
+                    onValueChange={(value) => handleInputChange('room_id', value)}
+                  >
+                    <SelectTrigger id="room_id" className="w-full mt-1">
+                      <SelectValue placeholder="Sélectionner une pièce" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roomsList.map(room => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {errors.room_id && <p className="text-xs text-red-500 mt-1">{errors.room_id}</p>}
               </div>
-
               <div>
-                <Label>Assigner à</Label>
-                <Select
-                  value={formData.assigned_to}
-                  onValueChange={(value) => handleInputChange('assigned_to', value === 'auto' ? '' : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un membre (optionnel)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Assignation automatique</SelectItem>
-                    {members.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        <div className="flex items-center">
-                          <User className="w-4 h-4 mr-2" />
-                          {member.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="assigned_to" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <User className="inline mr-2 h-4 w-4" />Assigner à
+                </Label>
+                {membersLoading && <p className="text-sm text-gray-500 dark:text-gray-400">Chargement des membres...</p>}
+                {membersError && <p className="text-sm text-red-500">{membersError}</p>}
+                {!membersLoading && !membersError && (
+                  <Select
+                    value={formData.assigned_to}
+                    onValueChange={(value) => handleInputChange('assigned_to', value)}
+                  >
+                    <SelectTrigger id="assigned_to" className="w-full mt-1">
+                      <SelectValue placeholder="Sélectionner un membre ou automatique" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">Automatique (prochain disponible)</SelectItem>
+                      {membersList.map(member => (
+                        <SelectItem key={member.user_id} value={member.user_id}>
+                          {member.user_full_name || member.user_email || member.user_id} {/* Afficher nom, email ou ID */}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
           )}
@@ -543,7 +598,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
                     </span>
                     <span className="flex items-center">
                       <Home className="w-4 h-4 mr-1" />
-                      {rooms.find(r => r.id === formData.room_id)?.name}
+                      {roomsList.find(r => r.id === formData.room_id)?.name}
                     </span>
                     <span className="flex items-center">
                       <Repeat className="w-4 h-4 mr-1" />

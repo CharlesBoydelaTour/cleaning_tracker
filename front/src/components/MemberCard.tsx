@@ -144,7 +144,7 @@ const MemberCard = ({
                         {canRemove && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="sm">
+                                    <Button variant="ghost" size="icon"> {/* Changé de size="sm" à size="icon" */}
                                         <MoreHorizontal className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>

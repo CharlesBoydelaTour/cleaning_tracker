@@ -778,19 +778,25 @@ async def get_household_members(
     pool: asyncpg.Pool, 
     household_id: UUID
 ) -> List[Dict[str, Any]]:
-    """Récupérer la liste des membres d'un ménage"""
+    """Récupérer tous les membres d'un ménage avec leurs détails utilisateur."""
     async with pool.acquire() as conn:
-        members = await conn.fetch(
+        rows = await conn.fetch(
             """
-            SELECT id, household_id, user_id, role, joined_at
-            FROM household_members
-            WHERE household_id = $1
-            ORDER BY role
+            SELECT 
+                hm.id, 
+                hm.household_id, 
+                hm.user_id, 
+                hm.role, 
+                hm.joined_at,
+                u.full_name as user_full_name,  -- Joindre et récupérer le nom complet de l'utilisateur
+                u.email as user_email          -- Joindre et récupérer l'email de l'utilisateur
+            FROM household_members hm
+            JOIN public.users u ON hm.user_id = u.id  -- Jointure avec public.users
+            WHERE hm.household_id = $1
             """,
             household_id,
         )
-
-        return [dict(member) for member in members]
+        return [dict(row) for row in rows]
 
 
 async def get_household_member(
@@ -798,19 +804,26 @@ async def get_household_member(
     household_id: UUID, 
     member_id: UUID
 ) -> Optional[Dict[str, Any]]:
-    """Récupérer un membre spécifique"""
+    """Récupérer un membre spécifique d'un ménage avec ses détails utilisateur."""
     async with pool.acquire() as conn:
-        member = await conn.fetchrow(
+        row = await conn.fetchrow(
             """
-            SELECT id, household_id, user_id, role, joined_at
-            FROM household_members
-            WHERE household_id = $1 AND id = $2
+            SELECT 
+                hm.id, 
+                hm.household_id, 
+                hm.user_id, 
+                hm.role, 
+                hm.joined_at,
+                u.full_name as user_full_name, -- Joindre et récupérer le nom complet de l'utilisateur
+                u.email as user_email         -- Joindre et récupérer l'email de l'utilisateur
+            FROM household_members hm
+            JOIN public.users u ON hm.user_id = u.id -- Jointure avec public.users
+            WHERE hm.household_id = $1 AND hm.id = $2
             """,
             household_id,
             member_id,
         )
-
-        return dict(member) if member else None
+        return dict(row) if row else None
 
 
 async def create_household_member(
