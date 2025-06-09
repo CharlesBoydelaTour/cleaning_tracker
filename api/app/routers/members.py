@@ -233,15 +233,17 @@ async def invite_household_member(
 async def update_household_member_endpoint(
     household_id: UUID,
     member_id: UUID,
-    requesting_user_id: UUID,  # ID de l'utilisateur effectuant la requête
     member_update: HouseholdMemberUpdate,
     db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user), # Utiliser current_user pour l'authentification
 ):
     """
     Met à jour un membre d'un ménage (généralement son rôle).
     L'utilisateur doit avoir les permissions nécessaires pour gérer les membres.
     """
     try:
+        requesting_user_id = current_user["id"] # Extraire l'ID de l'utilisateur authentifié
+
         # Vérifier que l'utilisateur a accès à ce ménage
         has_access = await check_household_access(db_pool, household_id, requesting_user_id)
         if not has_access:
@@ -273,22 +275,29 @@ async def update_household_member_endpoint(
             updated_member = await update_household_member(
                 db_pool, household_id, member_id, member_update.role
             )
+            if not updated_member: # Vérifier si la mise à jour a réussi
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="La mise à jour du membre a échoué." # Message plus spécifique si possible
+                )
             return updated_member
         else:
             # Si aucune modification n'est demandée, retourner le membre existant
-            return existing_member
+            return HouseholdMember(**existing_member) # Assurer la conformité au modèle de réponse
 
     except HTTPException:
         raise
-    except ValueError as e:
+    except ValueError as e: # Erreurs de validation ou logiques (ex: rôle invalide)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, # Utiliser 422 pour les erreurs de validation
             detail=str(e),
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erreur lors de la mise à jour du membre: {str(e)}",
+            detail=f"Erreur interne lors de la mise à jour du membre: {str(e)}",
         )
 
 
@@ -296,14 +305,16 @@ async def update_household_member_endpoint(
 async def delete_household_member_endpoint(
     household_id: UUID,
     member_id: UUID,
-    requesting_user_id: UUID,  # ID de l'utilisateur effectuant la requête
     db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user), # Utiliser current_user pour l'authentification
 ):
     """
     Supprime un membre d'un ménage.
     L'utilisateur doit avoir les permissions nécessaires pour supprimer des membres.
     """
     try:
+        requesting_user_id = current_user["id"] # Extraire l'ID de l'utilisateur authentifié
+
         # Vérifier que l'utilisateur a accès à ce ménage
         has_access = await check_household_access(db_pool, household_id, requesting_user_id)
         if not has_access:
