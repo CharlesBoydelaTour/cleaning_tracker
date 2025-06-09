@@ -33,9 +33,9 @@ export const useAuth = () => {
         if (error.isServerDown) {
           setIsServerDown(true);
           setError('Mode demo - Serveur indisponible');
-          // En mode demo, on garde un utilisateur fictif
+          // En mode demo, on garde un utilisateur fictif avec un UUID valide
           setUser({
-            id: 'demo-user-id',
+            id: '00000000-0000-0000-0000-000000000000',
             email: 'demo@example.com',
             email_verified: true
           });

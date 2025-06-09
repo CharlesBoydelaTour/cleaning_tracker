@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional, Literal
 from uuid import UUID
@@ -28,3 +28,13 @@ class HouseholdMemberUpdate(BaseModel):
     role: Optional[Literal["admin", "member", "guest"]] = None
 
     model_config = {"strict": False}  # Cohérence avec les autres schémas
+
+
+class HouseholdMemberInvite(BaseModel):
+    email: EmailStr
+    role: str = "member"
+
+
+class HouseholdMemberWithUser(HouseholdMember):
+    user_email: Optional[EmailStr] = None
+    user_full_name: Optional[str] = None

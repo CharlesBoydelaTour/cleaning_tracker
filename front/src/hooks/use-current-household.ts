@@ -22,8 +22,8 @@ export function useCurrentHousehold() {
     setError(null);
     try {
       // Récupérer les ménages pour l'utilisateur connecté.
-      // L'API /households?user_id={id} les retourne triés par nom.
-      const households = await householdsService.getAll(user.id);
+      // L'API /households utilise maintenant l'authentification JWT
+      const households = await householdsService.getAll();
       
       if (households.length > 0) {
         // Le premier ménage de la liste est celui à afficher (tri alphabétique fait par l'API)

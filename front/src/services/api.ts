@@ -25,13 +25,13 @@ api.interceptors.response.use(
     if (!error.response || error.response.status >= 500) {
       console.warn('Backend indisponible, passage en mode dégradé');
       // Ne pas rediriger, laisser l'app gérer
-      return Promise.reject({ 
-        ...error, 
+      return Promise.reject({
+        ...error,
         isServerDown: true,
         message: 'Serveur temporairement indisponible'
       });
     }
-    
+
     if (error.response?.status === 401) {
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
@@ -40,6 +40,14 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Fonction helper pour ajouter l'ID de l'utilisateur aux paramètres de requête
+// Avec l'authentification JWT, cette fonction est redondante car l'utilisateur est identifié par le token.
+// Elle est conservée ici pour la compatibilité avec le code existant qui l'appelle.
+export const withRequestingUserId = async (params: Record<string, any> = {}): Promise<Record<string, any>> => {
+  // L'identification de l'utilisateur se fait via le token JWT, donc cette fonction ne modifie plus les paramètres.
+  return params;
+};
 
 // Service d'authentification avec fallback
 export const authService = {
@@ -52,7 +60,7 @@ export const authService = {
         // Mode demo pour développement
         return {
           user: {
-            id: 'demo-user-id',
+            id: '00000000-0000-0000-0000-000000000000',
             email: credentials.email,
             email_verified: true
           },
@@ -76,7 +84,7 @@ export const authService = {
         // Mode demo pour développement
         return {
           user: {
-            id: 'demo-user-id',
+            id: '00000000-0000-0000-0000-000000000000',
             email: credentials.email,
             email_verified: true
           },
@@ -99,7 +107,7 @@ export const authService = {
       if (error.isServerDown) {
         // Mode demo pour développement
         return {
-          id: 'demo-user-id',
+          id: '00000000-0000-0000-0000-000000000000',
           email: 'demo@example.com',
           email_verified: true
         };
@@ -225,37 +233,39 @@ export const taskService = {
     }
   },
 
-async createTask(householdId: string, taskData: any) {
-  console.log('taskService.createTask appelé:', { householdId, taskData });
-  
-  try {
-    const requestData = {
-      ...taskData,
-      household_id: householdId
-    };
-    
-    console.log('Données de la requête:', requestData);
-    console.log('URL de la requête:', `${API_BASE_URL}/households/${householdId}/task-definitions`);
-    
-    const response = await api.post(`/households/${householdId}/task-definitions`, requestData);
-    
-    console.log('Réponse de l\'API:', response.data);
-    return response.data;
-  } catch (error: any) {
-    console.error('Erreur dans createTask:', error);
-    
-    if (error.isServerDown) {
-      console.log('Mode demo activé');
-      // Mode demo
-      const demoResult = {
-        id: `demo-task-${Date.now()}`,
+  async createTask(householdId: string, taskData: any) {
+    console.log('taskService.createTask appelé:', { householdId, taskData });
+
+    try {
+      const requestData = {
         ...taskData,
-        created_at: new Date().toISOString()
+        household_id: householdId
       };
-      console.log('Retour demo:', demoResult);
-      return demoResult;
+
+      console.log('Données de la requête:', requestData);
+      console.log('URL de la requête:', `${API_BASE_URL}/households/${householdId}/task-definitions`);
+
+      const response = await api.post(`/households/${householdId}/task-definitions`, requestData);
+
+      console.log('Réponse de l\'API:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Erreur dans createTask:', error);
+
+      if (error.isServerDown) {
+        console.log('Mode demo activé');
+        // Mode demo
+        const demoResult = {
+          id: `demo-task-${Date.now()}`,
+          ...taskData,
+          created_at: new Date().toISOString()
+        };
+        console.log('Retour demo:', demoResult);
+        return demoResult;
+      }
+      throw error;
     }
-    throw error;
   }
-}
 };
+
+export default api;

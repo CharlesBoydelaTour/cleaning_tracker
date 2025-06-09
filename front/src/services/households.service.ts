@@ -1,11 +1,10 @@
 import apiClient from '@/lib/api-client';
-import { withRequestingUserId } from './api-helpers';
+import { withRequestingUserId } from './api';
 import type { Household, HouseholdCreate, HouseholdMember, HouseholdMemberCreate, Room } from '@/types';
 
 export const householdsService = {
-  async getAll(userId?: string): Promise<Household[]> { // Accepter un userId optionnel
-    const params = userId ? { user_id: userId } : {}; // L'API attend 'user_id'
-    const response = await apiClient.get<Household[]>('/households', { params });
+  async getAll(): Promise<Household[]> {
+    const response = await apiClient.get<Household[]>('/households');
     return response.data;
   },
 
@@ -15,40 +14,27 @@ export const householdsService = {
   },
 
   async create(data: HouseholdCreate): Promise<Household> {
-    const params = await withRequestingUserId({});
-    const response = await apiClient.post<Household>(
-      '/households',
-      data,
-      { params }
-    );
+    const response = await apiClient.post<Household>('/households', data);
     return response.data;
   },
 
   async getMembers(householdId: string): Promise<HouseholdMember[]> {
-    const params = await withRequestingUserId({});
-    const response = await apiClient.get<HouseholdMember[]>(
-      `/households/${householdId}/members`,
-      { params }
-    );
+    const response = await apiClient.get<HouseholdMember[]>(`/households/${householdId}/members`);
     return response.data;
   },
 
   async addMember(householdId: string, data: HouseholdMemberCreate): Promise<HouseholdMember> {
-    const params = await withRequestingUserId({});
     const response = await apiClient.post<HouseholdMember>(
       `/households/${householdId}/members`,
-      data,
-      { params }
+      data
     );
     return response.data;
   },
 
   async updateMember(householdId: string, memberId: string, role: string): Promise<HouseholdMember> {
-    const params = await withRequestingUserId({});
     const response = await apiClient.put<HouseholdMember>(
       `/households/${householdId}/members/${memberId}`,
-      { role },
-      { params }
+      { role }
     );
     return response.data;
   },

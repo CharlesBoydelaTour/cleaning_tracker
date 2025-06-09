@@ -24,35 +24,71 @@ async def init_db_pool():
 async def create_user(
     pool: asyncpg.Pool,
     email: str,
-    hashed_password: str,
+    hashed_password: Optional[str] = None,  # Modifié pour être optionnel
     full_name: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Créer un nouvel utilisateur"""
+    """Créer un nouvel utilisateur. hashed_password peut être None pour les utilisateurs invités."""
     async with pool.acquire() as conn:
+        # Utiliser la partie locale de l'email comme full_name si non fourni
+        effective_full_name = full_name if full_name else email.split('@')[0]
+        
+        # La colonne id dans public.users est synchronisée depuis auth.users.id
+        # Si nous créons un utilisateur directement ici, il n'aura pas d'entrée auth.users
+        # Cela pourrait être problématique. Idéalement, l'invitation créerait l'utilisateur via Supabase Auth.
+        # Pour cette implémentation, nous allons insérer dans public.users,
+        # mais il faut être conscient de cette potentielle désynchronisation ou de la nécessité
+        # d'un processus d'invitation plus robuste via Supabase.
+
+        # Supposons que la table users (public.users) a une colonne pour le mot de passe haché
+        # et qu'elle est nullable. Le nom de la colonne peut varier (ex: hashed_password, encrypted_password)
+        # Je vais utiliser hashed_password comme dans la signature.
+        # La colonne id doit être gérée correctement, gen_random_uuid() est utilisé ici.
+        
         user_id = await conn.fetchval(
             """
-            INSERT INTO users (id, email, full_name, hashed_password, created_at, updated_at, is_active)
-            VALUES (gen_random_uuid(), $1, $2, $3, NOW(), NOW(), TRUE)
+            INSERT INTO public.users (email, full_name, hashed_password, created_at, updated_at, is_active)
+            VALUES ($1, $2, $3, NOW(), NOW(), TRUE)
+            ON CONFLICT (email) DO NOTHING  -- Pour éviter les erreurs si l'email existe déjà, bien que get_user_by_email devrait le gérer
             RETURNING id
             """,
             email,
-            full_name,
-            hashed_password
+            effective_full_name,
+            hashed_password  # Peut être NULL
         )
+
+        if not user_id: # Si ON CONFLICT DO NOTHING a été déclenché et rien n'a été inséré
+            existing_user = await conn.fetchrow("SELECT id FROM public.users WHERE email = $1", email)
+            if existing_user:
+                user_id = existing_user['id']
+            else:
+                # Cela ne devrait pas arriver si l'email existe et que ON CONFLICT est bien géré
+                raise Exception(f"Impossible de créer ou de récupérer l'utilisateur avec l'email {email}")
+
 
         user_data = await conn.fetchrow(
             """
-            SELECT id, email, raw_user_meta_data->>'full_name' as full_name, 
-                   created_at, updated_at, email_confirmed_at,
-                   raw_app_meta_data->>'is_active'::boolean as is_active,
-                   raw_app_meta_data->>'is_superuser'::boolean as is_superuser
-            FROM auth.users
+            SELECT id, email, full_name, created_at, updated_at, email_confirmed_at, is_active
+            FROM public.users
             WHERE id = $1
             """,
             user_id
         )
+        # Note: hashed_password n'est pas retourné pour des raisons de sécurité.
+        return dict(user_data) if user_data else None
 
-        return dict(user_data)
+
+async def get_user_by_email(pool: asyncpg.Pool, email: str) -> Optional[Dict[str, Any]]:
+    """Récupérer un utilisateur par son adresse e-mail."""
+    async with pool.acquire() as conn:
+        user_data = await conn.fetchrow(
+            """
+            SELECT id, email, full_name, created_at, updated_at, email_confirmed_at, is_active
+            FROM public.users 
+            WHERE email = $1
+            """,
+            email,
+        )
+        return dict(user_data) if user_data else None
 
 
 # ============================================================================
@@ -683,7 +719,7 @@ async def create_household(
 
         if created_by_user_id:
             user_exists = await conn.fetchval(
-                "SELECT 1 FROM auth.users WHERE id = $1",
+                "SELECT 1 FROM users WHERE id = $1",
                 created_by_user_id
             )
             

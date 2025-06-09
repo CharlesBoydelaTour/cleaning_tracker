@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Request, status
 from app.schemas.household import HouseholdCreate, Household
 from app.core.database import get_households, create_household
 from app.core.exceptions import DatabaseError, UnauthorizedAccess, HouseholdNotFound
+from app.core.security import get_current_user
 import asyncpg
 from uuid import UUID
 from app.schemas.auth import UserResponse
@@ -17,14 +18,13 @@ async def get_db_pool(request: Request) -> asyncpg.Pool:
 @router.get("/", response_model=list[Household])
 async def list_households(
     db_pool: asyncpg.Pool = Depends(get_db_pool),
-    user_id: str = None,  # Dans un vrai système, cela viendrait d'un token JWT
+    current_user: dict = Depends(get_current_user),
 ):
     """
-    Récupère la liste des ménages.
-
-    Si un user_id est fourni, ne récupère que les ménages de cet utilisateur.
+    Récupère la liste des ménages de l'utilisateur authentifié.
     """
     try:
+        user_id = current_user["id"]
         households = await get_households(db_pool, user_id)
         return households
     except Exception as e:
@@ -37,13 +37,14 @@ async def list_households(
 @router.post("/", response_model=Household, status_code=status.HTTP_201_CREATED)
 async def create_new_household(
     household: HouseholdCreate,
-    requesting_user_id: UUID,  # ID de l'utilisateur créant le ménage (devrait venir de l'authentification)
     db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Crée un nouveau ménage et ajoute l'utilisateur créateur comme administrateur.
     """
     try:
+        requesting_user_id = current_user["id"]
         # Le user_id est maintenant obligatoire et passé à create_household
         new_household = await create_household(
             db_pool, household.name, requesting_user_id
