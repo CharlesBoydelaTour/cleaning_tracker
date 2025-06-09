@@ -35,25 +35,27 @@ const MemberCard = ({
     const canChangeRole = canManageMembers && !isCurrentUser;
     const canRemove = canManageMembers && !isCurrentUser;
 
-    const roleIcons = {
+    const roleIconsSafe = {
         admin: Shield,
         member: User,
         guest: Eye
     };
 
-    const roleLabels = {
+    const roleLabelsSafe = {
         admin: 'Administrateur',
         member: 'Membre',
         guest: 'Invité'
     };
+
+    // Utiliser des fallbacks plus robustes pour RoleIcon et currentRoleLabel
+    const RoleIcon = roleIconsSafe[member.role as keyof typeof roleIconsSafe] || User; 
+    const currentRoleLabel = roleLabelsSafe[member.role as keyof typeof roleLabelsSafe] || 'Membre';
 
     const roleColors = {
         admin: 'bg-red-100 text-red-800 border-red-200',
         member: 'bg-blue-100 text-blue-800 border-blue-200',
         guest: 'bg-gray-100 text-gray-800 border-gray-200'
     };
-
-    const RoleIcon = roleIcons[member.role];
 
     const handleRoleChange = (newRole: 'admin' | 'member' | 'guest') => {
         setIsChangingRole(true);
@@ -99,7 +101,7 @@ const MemberCard = ({
                                 <p className="text-sm text-gray-600">{member.user_email}</p>
                             )}
                             <p className="text-xs text-gray-500">
-                                Membre depuis {new Date(member.joined_at || '').toLocaleDateString('fr-FR')}
+                                {member.joined_at ? `Membre depuis ${new Date(member.joined_at).toLocaleDateString('fr-FR')}` : 'Date d\'adhésion inconnue'}
                             </p>
                         </div>
                     </div>
@@ -114,26 +116,28 @@ const MemberCard = ({
                                 <SelectTrigger className="w-32">
                                     <div className="flex items-center gap-1">
                                         <RoleIcon className="h-3 w-3" />
-                                        <span className="text-xs">{roleLabels[member.role]}</span>
+                                        <span className="text-xs">{currentRoleLabel}</span>
                                     </div>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {Object.entries(roleLabels).map(([value, label]) => (
-                                        <SelectItem key={value} value={value}>
-                                            <div className="flex items-center gap-2">
-                                                {roleIcons[value as keyof typeof roleIcons] &&
-                                                    roleIcons[value as keyof typeof roleIcons]({ className: "h-3 w-3" })
-                                                }
-                                                <span>{label}</span>
-                                            </div>
-                                        </SelectItem>
-                                    ))}
+                                    {Object.entries(roleLabelsSafe).map(([value, label]) => {
+                                        // S'assurer que ItemIcon a un fallback
+                                        const ItemIcon = roleIconsSafe[value as keyof typeof roleIconsSafe] || User;
+                                        return (
+                                            <SelectItem key={value} value={value}>
+                                                <div className="flex items-center gap-2">
+                                                    <ItemIcon className="h-3 w-3" />
+                                                    <span>{label}</span>
+                                                </div>
+                                            </SelectItem>
+                                        );
+                                    })}
                                 </SelectContent>
                             </Select>
                         ) : (
-                            <Badge variant="secondary" className={roleColors[member.role]}>
+                            <Badge variant="secondary" className={roleColors[member.role as keyof typeof roleColors] || roleColors.member}>
                                 <RoleIcon className="h-3 w-3 mr-1" />
-                                {roleLabels[member.role]}
+                                {currentRoleLabel}
                             </Badge>
                         )}
 

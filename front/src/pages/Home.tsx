@@ -53,7 +53,7 @@ const Home = () => {
         isLoading: membersLoading,
         error: membersError,
         refetch: refetchMembers
-    } = useQuery({
+    } = useQuery<HouseholdMember[], Error>({ // Spécifier les types pour data et error
         queryKey: ['members', householdId],
         queryFn: () => householdId ? membersService.getAll(householdId) : Promise.resolve([]),
         enabled: !!householdId,
@@ -123,69 +123,12 @@ const Home = () => {
             alert('Erreur lors de la suppression du membre');
         }
     });
-
+    
     // 1. Gérer le chargement de l'authentification
-    if (authLoading) {
-        return (
-            <AppLayout activeHousehold="Chargement...">
-                <div className="container mx-auto px-4 py-6 text-center">Chargement des informations utilisateur...</div>
-            </AppLayout>
-        );
-    }
+    // 2. Gérer le chargement du foyer actuel
+    // 3. Gérer les erreurs de chargement
 
-    // 2. Gérer le cas où l'utilisateur n'est pas authentifié
-    if (!user) {
-        return (
-            <AppLayout activeHousehold="Connexion requise">
-                <div className="container mx-auto px-4 py-6 text-center">Veuillez vous connecter pour accéder à cette page.</div>
-            </AppLayout>
-        );
-    }
-
-    // 3. Gérer le chargement du ménage
-    if (householdLoading) {
-        return (
-            <AppLayout activeHousehold="Chargement...">
-                <div className="container mx-auto px-4 py-6 text-center">Chargement des informations du foyer...</div>
-            </AppLayout>
-        );
-    }
-
-    // 4. Gérer l'erreur de chargement du ménage
-    if (householdError) {
-        return (
-            <AppLayout activeHousehold="Erreur">
-                <div className="container mx-auto px-4 py-6 text-center">
-                    <p className="text-red-600">Erreur lors du chargement du foyer : {householdError}</p>
-                    <Button onClick={() => refetchHousehold && refetchHousehold()} className="mt-2">
-                        Réessayer
-                    </Button>
-                </div>
-            </AppLayout>
-        );
-    }
-
-    // 5. Si aucun foyer n'est trouvé
-    if (!currentHousehold) {
-        return (
-            <AppLayout activeHousehold="Bienvenue">
-                <WelcomeScreen onCreateHousehold={() => setShowCreateHouseholdModal(true)} />
-                <CreateHouseholdModal
-                    open={showCreateHouseholdModal}
-                    onOpenChange={setShowCreateHouseholdModal}
-                    onSuccess={() => {
-                        setShowCreateHouseholdModal(false);
-                        if (refetchHousehold) {
-                            refetchHousehold();
-                        } else {
-                            window.location.reload();
-                        }
-                    }}
-                />
-            </AppLayout>
-        );
-    }
-
+    // Déplacement des fonctions de handler ici, avant la section de logging et de return.
     const handleCreateRoom = (roomData: { name: string; icon?: string }) => {
         console.log('handleCreateRoom appelé avec:', roomData);
         console.log('householdId:', householdId);
@@ -213,7 +156,23 @@ const Home = () => {
     };
 
     // Vérifier si l'utilisateur actuel est admin
-    const isAdmin = members.find(m => m.user_id === user?.id)?.role === 'admin';
+    const currentUserMemberInfo = members.find(m => m.user_id === user?.id);
+    const isAdmin = !!user && !!currentUserMemberInfo && currentUserMemberInfo.role === 'admin';
+
+    // DEBUG LOGS
+    if (activeTab === 'members') {
+      console.log('[Home.tsx] Rendering members tab');
+      console.log('[Home.tsx] householdId:', householdId);
+      console.log('[Home.tsx] membersLoading:', membersLoading);
+      console.log('[Home.tsx] membersError:', membersError);
+      console.log('[Home.tsx] user:', user ? { id: user.id, email: user.email } : null);
+      try {
+        console.log('[Home.tsx] currentUserMemberInfo:', JSON.parse(JSON.stringify(currentUserMemberInfo)));
+      } catch (e) {
+        console.log('[Home.tsx] currentUserMemberInfo (raw):', currentUserMemberInfo);
+      }
+      console.log('[Home.tsx] isAdmin:', isAdmin);
+    }
 
     // Icônes par défaut pour les pièces
     const defaultIcons = {
@@ -415,7 +374,7 @@ const Home = () => {
                         {membersError && (
                             <div className="flex items-center justify-center h-64">
                                 <div className="text-center">
-                                    <p className="text-red-600">Erreur lors du chargement des membres</p>
+                                    <p className="text-red-600">Erreur lors du chargement des membres: {membersError.message}</p> {/* Afficher le message d'erreur */}
                                     <Button onClick={() => refetchMembers()} className="mt-2">
                                         Réessayer
                                     </Button>
@@ -424,7 +383,7 @@ const Home = () => {
                         )}
 
                         {/* Members List */}
-                        {!membersLoading && !membersError && (
+                        {!membersLoading && !membersError && currentHousehold && (
                             <>
                                 {members.length > 0 ? (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -433,7 +392,7 @@ const Home = () => {
                                                 key={member.id}
                                                 member={member}
                                                 currentUserId={user?.id}
-                                                currentUserRole={members.find(m => m.user_id === user?.id)?.role}
+                                                currentUserRole={currentUserMemberInfo?.role} // Utiliser le rôle du membre actuel trouvé
                                                 onRoleChange={handleChangeRole}
                                                 onRemoveMember={handleRemoveMember}
                                                 isUpdating={changeRoleMutation.isPending || removeMemberMutation.isPending}
