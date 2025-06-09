@@ -123,7 +123,7 @@ const Home = () => {
             alert('Erreur lors de la suppression du membre');
         }
     });
-    
+
     // 1. Gérer le chargement de l'authentification
     // 2. Gérer le chargement du foyer actuel
     // 3. Gérer les erreurs de chargement
@@ -161,17 +161,17 @@ const Home = () => {
 
     // DEBUG LOGS
     if (activeTab === 'members') {
-      console.log('[Home.tsx] Rendering members tab');
-      console.log('[Home.tsx] householdId:', householdId);
-      console.log('[Home.tsx] membersLoading:', membersLoading);
-      console.log('[Home.tsx] membersError:', membersError);
-      console.log('[Home.tsx] user:', user ? { id: user.id, email: user.email } : null);
-      try {
-        console.log('[Home.tsx] currentUserMemberInfo:', JSON.parse(JSON.stringify(currentUserMemberInfo)));
-      } catch (e) {
-        console.log('[Home.tsx] currentUserMemberInfo (raw):', currentUserMemberInfo);
-      }
-      console.log('[Home.tsx] isAdmin:', isAdmin);
+        console.log('[Home.tsx] Rendering members tab');
+        console.log('[Home.tsx] householdId:', householdId);
+        console.log('[Home.tsx] membersLoading:', membersLoading);
+        console.log('[Home.tsx] membersError:', membersError);
+        console.log('[Home.tsx] user:', user ? { id: user.id, email: user.email } : null);
+        try {
+            console.log('[Home.tsx] currentUserMemberInfo:', JSON.parse(JSON.stringify(currentUserMemberInfo)));
+        } catch (e) {
+            console.log('[Home.tsx] currentUserMemberInfo (raw):', currentUserMemberInfo);
+        }
+        console.log('[Home.tsx] isAdmin:', isAdmin);
     }
 
     // Icônes par défaut pour les pièces

@@ -48,7 +48,7 @@ const MemberCard = ({
     };
 
     // Utiliser des fallbacks plus robustes pour RoleIcon et currentRoleLabel
-    const RoleIcon = roleIconsSafe[member.role as keyof typeof roleIconsSafe] || User; 
+    const RoleIcon = roleIconsSafe[member.role as keyof typeof roleIconsSafe] || User;
     const currentRoleLabel = roleLabelsSafe[member.role as keyof typeof roleLabelsSafe] || 'Membre';
 
     const roleColors = {
