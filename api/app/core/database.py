@@ -1,4 +1,7 @@
 import asyncpg
+import asyncio
+import logging
+import os
 from typing import Optional, Dict, Any, List
 from uuid import UUID
 from datetime import date, datetime, timedelta
@@ -8,13 +11,31 @@ from app.config import settings
 from app.schemas.task import TaskStatus
 
 
-async def init_db_pool():
-    """Initialise le pool de connexions à la base de données"""
+async def init_db_pool(optional: bool = False, timeout: float = 10.0):
+    """Initialise le pool de connexions à la base de données.
+
+    Args:
+        optional: si True, en cas d'échec la fonction retourne None au lieu d'élever.
+        timeout: délai max (secondes) pour établir le pool.
+
+    Returns:
+        asyncpg.Pool ou None si optional et échec.
+    """
     database_url = settings.database_url
     if database_url.startswith("postgresql+asyncpg://"):
         database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
-    
-    return await asyncpg.create_pool(dsn=database_url)
+
+    try:
+        return await asyncio.wait_for(asyncpg.create_pool(dsn=database_url), timeout=timeout)
+    except Exception as e:
+        if optional:
+            logging.warning(f"[db] Impossible de créer le pool (mode optionnel activé): {e}")
+            return None
+        raise
+
+def ensure_pool(pool: Optional[asyncpg.Pool]):
+    if pool is None:
+        raise RuntimeError("Base de données non initialisée (pool None). Activez DB_OPTIONAL=1 seulement pour les endpoints qui ne requièrent pas le stockage.")
 
 
 # ============================================================================
@@ -28,6 +49,7 @@ async def create_user(
     full_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """Créer un nouvel utilisateur. hashed_password peut être None pour les utilisateurs invités."""
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         # Utiliser la partie locale de l'email comme full_name si non fourni
         effective_full_name = full_name if full_name else email.split('@')[0]
@@ -79,6 +101,7 @@ async def create_user(
 
 async def get_user_by_email(pool: asyncpg.Pool, email: str) -> Optional[Dict[str, Any]]:
     """Récupérer un utilisateur par son adresse e-mail."""
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         user_data = await conn.fetchrow(
             """
@@ -123,6 +146,7 @@ async def create_task_definition(
     Returns:
         Dict contenant les données de la définition créée
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         task_def_id = await conn.fetchval(
             """
@@ -170,6 +194,7 @@ async def get_task_definitions(
     Returns:
         Liste des définitions de tâches
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         # Construire la requête dynamiquement
         query = """
@@ -221,6 +246,7 @@ async def get_task_definition(
     Returns:
         Dict avec les données ou None si non trouvée
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
@@ -251,6 +277,7 @@ async def update_task_definition(
     Returns:
         Dict avec les données mises à jour
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         # Construire la requête UPDATE dynamiquement
         update_fields = []
@@ -296,6 +323,7 @@ async def delete_task_definition(
     Returns:
         True si supprimée, False sinon
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         result = await conn.execute(
             "DELETE FROM task_definitions WHERE id = $1",
@@ -328,6 +356,7 @@ async def create_task_occurrence(
     Returns:
         Dict avec les données de l'occurrence créée
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         try:
             occurrence_id = await conn.fetchval(
@@ -378,6 +407,7 @@ async def get_task_occurrences(
     Returns:
         Liste des occurrences avec les infos de définition
     """
+    ensure_pool(pool)
     async with pool.acquire() as conn:
         query = """
             SELECT 

@@ -5,6 +5,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 from app.routers import auth, households, members, rooms, task_definitions, task_occurrences, notification_preferences
 
+import os
 from app.core.database import init_db_pool
 from app.core.exceptions import BaseApplicationException
 from app.core.exception_handler import (
@@ -18,13 +19,20 @@ from app.config import settings
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Initialize the database connection pool
-    app.state.db_pool = await init_db_pool()
-    print("Database connection pool initialized.")
+    db_optional = os.getenv("DB_OPTIONAL", "0") == "1"
+    try:
+        timeout = float(os.getenv("DB_INIT_TIMEOUT", "10"))
+    except ValueError:
+        timeout = 10.0
+    app.state.db_pool = await init_db_pool(optional=db_optional, timeout=timeout)
+    if app.state.db_pool:
+        print("Database connection pool initialized.")
+    else:
+        print("Database pool NOT initialized (DB_OPTIONAL=1).")
     yield
-    # Shutdown: Close the database connection pool
-    await app.state.db_pool.close()
-    print("Database connection pool closed.")
+    if app.state.db_pool:
+        await app.state.db_pool.close()
+        print("Database connection pool closed.")
 
 
 app = FastAPI(
@@ -66,5 +74,10 @@ async def read_root():
     return {
         "message": "Cleaning Tracker API v2.0",
         "docs": "/docs",
-        "redoc": "/redoc"
+    "redoc": "/redoc",
+    "db_connected": bool(app.state.db_pool)
     }
+
+@app.get("/healthz", tags=["health"]) 
+async def healthz():
+    return {"status": "ok", "db": bool(app.state.db_pool)}
