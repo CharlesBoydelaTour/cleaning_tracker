@@ -10,6 +10,8 @@
 .env.prod
 .env.staging
 .env.dev
+.env.remote
+.supabase.env
 
 # Logs
 app.log

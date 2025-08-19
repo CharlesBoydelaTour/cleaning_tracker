@@ -259,7 +259,15 @@ class AuthService:
         """
         try:
             from app.core.supabase_client import supabase_admin
-
+            if supabase_admin is None:
+                logger.warning(
+                    "Client admin Supabase non initialisé (SERVICE_ROLE_KEY manquant)",
+                    extra=with_context(user_id=user["id"] if isinstance(user, dict) else getattr(user, "id", None)),
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Fonctionnalité indisponible: clé service role absente côté serveur",
+                )
             logger.info(
                 "Récupération du profil utilisateur",
                 extra=with_context(
@@ -485,6 +493,11 @@ class AuthService:
         )
 
         try:
+            if supabase_admin_client is None:
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Suppression impossible: clé service role absente côté serveur",
+                )
             # La méthode delete_user du client Supabase admin ne retourne rien (None) en cas de succès
             # et lève une AuthApiError en cas d'échec.
             supabase_admin_client.auth.admin.delete_user(user_id)

@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     database_url: str  # Pydantic cherchera DATABASE_URL (insensible à la casse)
     secret_key: str  # Pydantic cherchera SECRET_KEY (insensible à la casse)
     redis_url: str  # Variable dans .env
-    service_role_key: str  # Pydantic cherchera SERVICE_ROLE_KEY (insensible à la casse)
+    service_role_key: Optional[str] = None  # Peut être absent en dev (actions admin désactivées)
 
     # Supabase settings
     supabase_url: str  # URL de votre projet Supabase
@@ -75,6 +75,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:8080",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://host.docker.internal:5173",
+    "http://host.docker.internal:3000",
     ]
 
 

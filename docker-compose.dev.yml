@@ -1,0 +1,69 @@
+services:
+  api:
+    build: ./api
+    container_name: ct_api
+    env_file:
+      # Choisir UN seul fichier d'env (décommentez UNE seule ligne):
+      # - ./api/.env.dev         # (mode local Supabase CLI)
+      - ./api/.env.remote        # (mode Supabase cloud)
+    environment:
+      ENVIRONMENT: development
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./api:/app
+      - /app/.venv
+      - api_logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  celery_worker:
+    build: ./api
+    container_name: ct_celery_worker
+    env_file:
+      # - ./api/.env.dev
+      - ./api/.env.remote
+    environment:
+      ENVIRONMENT: development
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./api:/app
+      - /app/.venv
+      - api_logs:/app/logs
+    depends_on:
+      - api
+      - redis
+    command: celery -A app.core.celery_app worker --loglevel=debug --concurrency=1
+
+  redis:
+    image: redis:7-alpine
+    container_name: ct_redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+  front:
+    build: ./front
+    container_name: ct_front
+    environment:
+      VITE_API_URL: http://api:8000
+    volumes:
+      - ./front:/app
+      - /app/node_modules
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+    command: bun run dev --host 0.0.0.0
+
+volumes:
+  redis_data:
+  api_logs:
+
+networks:
+  default:
+    name: cleaning_tracker_net
