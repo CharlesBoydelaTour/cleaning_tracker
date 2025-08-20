@@ -4,7 +4,7 @@
 
 ## 📋 Vue d'ensemble
 
-Cleaning Tracker est une application multi-plateforme (iOS, Android, Web) qui permet aux membres d'un foyer de planifier, suivre et accomplir leurs tâches ménagères de manière collaborative. L'application génère automatiquement un calendrier de tâches récurrentes et envoie des rappels personnalisés.
+Cleaning Tracker est une application pensée à l'origine pour fonctionner sur le Web et sur mobile. La partie mobile (React Native/Expo) est actuellement dépriorisée : l'itération en cours se concentre sur l'application web. Elle permet aux membres d'un foyer de planifier, suivre et accomplir leurs tâches ménagères de manière collaborative. L'application génère automatiquement un calendrier de tâches récurrentes et envoie des rappels personnalisés.
 
 ### 🎯 Problème résolu
 
@@ -61,7 +61,8 @@ graph TB
 
 | Composant | Technologie | Justification |
 |-----------|------------|---------------|
-| **Frontend mobile** | React Native 0.78 + Expo SDK 53 | Cross-platform, OTA updates, écosystème riche |
+| **Frontend web** | React 18 + Vite + Tailwind CSS | SPA rapide, dev simplifié |
+| **Frontend mobile** (dépriorisé) | React Native 0.78 + Expo SDK 53 | Prévu ultérieurement |
 | **Backend API** | FastAPI (Python 3.12) | Performance async, validation Pydantic, docs auto |
 | **Base de données** | PostgreSQL 16 + RLS | Sécurité multi-tenant, robustesse |
 | **Jobs asynchrones** | Celery 6 + Redis | Scalabilité, fiabilité des tâches de fond |
@@ -228,10 +229,14 @@ graph TB
 git clone https://github.com/your-org/cleaning-tracker.git
 cd cleaning-tracker
 
-# 2. Frontend (React Native)
+# 2. Frontend web
+cd front
 pnpm install
-cd apps/mobile
-pnpm expo start
+pnpm dev
+
+# (Optionnel) Application mobile – dépriorisée pour le moment
+# cd apps/mobile
+# pnpm expo start
 
 # 3. Backend (FastAPI)
 cd ../../api
@@ -243,6 +248,16 @@ make dev-worker  # Dans un autre terminal
 ```
 
 ### Configuration
+
+#### Supabase local
+
+Pour démarrer Supabase en local :
+
+```bash
+scripts/start-supabase-local.sh
+```
+
+La structure SQL est documentée dans [supabase/database.md](supabase/database.md).
 
 Créer les fichiers `.env` nécessaires :
 
@@ -256,9 +271,20 @@ SECRET_KEY=your_secret_key_for_jwt
 REDIS_URL=redis://localhost:6379/0
 ```
 
-## 📱 Captures d'écran
+```bash
+# front/.env
+VITE_API_URL=http://localhost:8000
+VITE_SUPABASE_URL=http://localhost:54321
+VITE_SUPABASE_ANON_KEY=your_anon_key
+```
 
-[À ajouter : screenshots de l'app mobile montrant le calendrier, les tâches, les stats]
+## 📸 Captures d'écran
+
+| Vue | Stakeholder responsable | Statut |
+| --- | ----------------------- | ------ |
+| Calendrier | Product | À fournir |
+| Liste des tâches | Design | À fournir |
+| Statistiques | Product | À fournir |
 
 ## 🧪 Tests
 
@@ -268,9 +294,13 @@ cd api
 make test          # Tous les tests
 make test-coverage # Avec couverture
 
-# Frontend  
-cd apps/mobile
+# Frontend web
+cd front
 pnpm test
+
+# (Mobile à venir)
+# cd apps/mobile
+# pnpm test
 ```
 
 ## 📈 Roadmap
