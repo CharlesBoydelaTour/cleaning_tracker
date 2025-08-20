@@ -82,12 +82,6 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
 
-  // Supprimer les données mock pour members
-  // const members = [
-  //   { id: 'user1', name: 'Moi', email: 'me@example.com' },
-  //   { id: 'user2', name: 'Marie Dupont', email: 'marie@example.com' },
-  //   { id: 'user3', name: 'Jean Martin', email: 'jean@example.com' }
-  // ];
 
   useEffect(() => {
     if (isOpen) {
