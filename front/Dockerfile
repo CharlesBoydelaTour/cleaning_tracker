@@ -1,15 +1,19 @@
-# Dockerfile front Vite React (dev)
-FROM oven/bun:1 as base
+## Dockerfile front Vite React (dev) - Node + pnpm
+FROM node:20-alpine AS base
 WORKDIR /app
 
-# Copier manifests
-COPY package.json bun.lockb ./
+# Installer pnpm
+RUN corepack enable
 
-# Installer deps (cache layer)
-RUN bun install
+# Copier manifest
+COPY package.json pnpm-lock.yaml* ./
 
-# Copier code
+# Installer dépendances (si lock disponible pnpm, sinon via package.json)
+RUN if [ -f pnpm-lock.yaml ]; then pnpm install; else pnpm install --no-frozen-lockfile; fi
+
+# Copier le code
 COPY . .
 
 EXPOSE 5173
-CMD ["bun", "run", "dev", "--host", "0.0.0.0"]
+ENV PORT=5173
+CMD ["pnpm", "dev", "--host", "0.0.0.0"]

@@ -1,23 +1,29 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Calendar, BarChart3, Settings, Plus, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import TaskCard from "@/components/TaskCard";
 import AppLayout from "@/components/AppLayout";
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
-import IntegrationStatus from '@/components/IntegrationStatus';
 import { useCurrentHousehold } from '@/hooks/use-current-household';
 import { useTodayTasks } from '@/hooks/use-task-occurrences';
 import { useAuth } from '@/hooks/use-auth';
 import NewTaskModal from '@/components/NewTaskModal';
-import { taskService } from '@/services/api';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import CreateHouseholdModal from '@/components/CreateHouseholdModal';
+import { taskService } from '@/services/api';
+import { taskDefinitionsService, type TaskDefinitionListItem } from '@/services/task-definitions.service';
+import { useToast } from '@/hooks/use-toast';
+import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
-    const { user, loading: authLoading, isServerDown } = useAuth();
+    const navigate = useNavigate();
+    const { toast } = useToast();
+    const { user, loading: authLoading } = useAuth();
     const {
         householdId,
         householdName,
@@ -32,7 +38,127 @@ const Dashboard = () => {
     const [showNewTaskModal, setShowNewTaskModal] = useState(false);
     const [showCreateHouseholdModal, setShowCreateHouseholdModal] = useState(false);
 
-    // 1. Gérer le chargement de l'authentification
+    // Scroll targets for stat cards
+    const overdueRef = useRef<HTMLDivElement | null>(null);
+    const todayRef = useRef<HTMLDivElement | null>(null);
+    const completedRef = useRef<HTMLDivElement | null>(null);
+
+    // All task definitions (table)
+    const [defs, setDefs] = useState<TaskDefinitionListItem[]>([]);
+    const [defsLoading, setDefsLoading] = useState(false);
+    const [defsError, setDefsError] = useState<string | null>(null);
+    const [defsSearch, setDefsSearch] = useState("");
+    const [sortKey, setSortKey] = useState<"title" | "room_name" | "estimated_minutes" | "created_at" | "next_occurrence">("created_at");
+    const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+    const [nextDates, setNextDates] = useState<Record<string, string | null>>({});
+
+    const fetchDefinitions = async () => {
+        if (!householdId) return;
+        setDefsLoading(true);
+        setDefsError(null);
+        try {
+            const data = await taskDefinitionsService.getByHousehold(householdId);
+            setDefs(data);
+            // Calculer en arrière-plan la prochaine occurrence pour chaque définition
+            Promise.all(
+                data.map(async (d) => {
+                    try {
+                        const dateStr = await taskDefinitionsService.getNextOccurrenceDate(householdId, d.id);
+                        return { id: d.id, dateStr } as const;
+                    } catch {
+                        return { id: d.id, dateStr: null } as const;
+                    }
+                })
+            ).then((pairs) => {
+                const map: Record<string, string | null> = {};
+                for (const p of pairs) map[p.id] = p.dateStr;
+                setNextDates(map);
+            });
+        } catch (e: any) {
+            const msg = e?.message || "Impossible de charger les tâches";
+            setDefsError(msg);
+            toast({ title: "Erreur", description: msg, variant: "destructive" });
+        } finally {
+            setDefsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (householdId) fetchDefinitions();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [householdId]);
+
+    const sortedFilteredDefs = useMemo(() => {
+        const q = defsSearch.trim().toLowerCase();
+        let items = defs;
+        if (q) {
+            items = items.filter((d) =>
+                d.title.toLowerCase().includes(q) ||
+                (d.description?.toLowerCase().includes(q) ?? false) ||
+                (d.room_name?.toLowerCase().includes(q) ?? false)
+            );
+        }
+        const sorted = [...items].sort((a, b) => {
+            const dir = sortDir === "asc" ? 1 : -1;
+            const av = sortKey === 'next_occurrence' ? nextDates[a.id] : (a as any)[sortKey];
+            const bv = sortKey === 'next_occurrence' ? nextDates[b.id] : (b as any)[sortKey];
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            if (sortKey === "estimated_minutes") {
+                return ((av as number) - (bv as number)) * dir;
+            }
+            return String(av).localeCompare(String(bv)) * dir;
+        });
+        return sorted;
+    }, [defs, defsSearch, sortKey, sortDir, nextDates]);
+
+    // Helper: convert occurrence to TaskCard props
+    const convertTaskForCard = (task: any) => ({
+        id: task.id,
+        title: task.definition_title || task.task_title || 'Tâche sans titre',
+        description: task.definition_description || task.task_description || '',
+        room: task.room_name || 'Aucune pièce',
+        assignee: task.assigned_user_name || task.assigned_user_email || 'Non assigné',
+        estimatedDuration: task.estimated_minutes || 0,
+        status: task.status === 'done' ? 'completed' as const :
+            task.status === 'overdue' ? 'overdue' as const :
+                'todo' as const,
+        dueTime: task.due_at ? new Date(task.due_at).toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit'
+        }) : '',
+        completedAt: task.status === 'done' ? 'Terminé' : undefined,
+        recurrence: 'Récurrent'
+    });
+
+    const {
+        tasks: todayTasks,
+        loading: tasksLoading,
+        error: tasksError,
+        todayStats,
+        tasksByStatus,
+        completeTask,
+        snoozeTask,
+        skipTask,
+        refetch: refetchTasks
+    } = tasksHookResult;
+
+    const handleCreateTask = async (taskData: any) => {
+        if (!householdId) {
+            alert("Aucun foyer sélectionné pour créer la tâche.");
+            return;
+        }
+        try {
+            await taskService.createTask(householdId, taskData);
+            await refetchTasks();
+            await fetchDefinitions();
+        } catch (error: any) {
+            toast({ title: 'Erreur', description: error?.message || 'Échec de la création', variant: 'destructive' });
+        }
+    };
+
+    // Auth and household loading/empty states
     if (authLoading) {
         return (
             <AppLayout activeHousehold="Chargement...">
@@ -41,7 +167,6 @@ const Dashboard = () => {
         );
     }
 
-    // 2. Gérer le cas où l'utilisateur n'est pas authentifié
     if (!user) {
         return (
             <AppLayout activeHousehold="Connexion requise">
@@ -50,7 +175,6 @@ const Dashboard = () => {
         );
     }
 
-    // 3. Gérer le chargement du ménage
     if (householdLoading) {
         return (
             <AppLayout activeHousehold="Chargement...">
@@ -59,7 +183,6 @@ const Dashboard = () => {
         );
     }
 
-    // 4. Gérer l'erreur de chargement du ménage
     if (householdError) {
         return (
             <AppLayout activeHousehold="Erreur">
@@ -73,7 +196,6 @@ const Dashboard = () => {
         );
     }
 
-    // 5. Si l'utilisateur est authentifié, le chargement du ménage est terminé, sans erreur, MAIS aucun ménage n'est trouvé
     if (!currentHousehold) {
         return (
             <AppLayout activeHousehold="Bienvenue">
@@ -94,19 +216,6 @@ const Dashboard = () => {
         );
     }
 
-    const {
-        tasks: todayTasks,
-        loading: tasksLoading,
-        error: tasksError,
-        todayStats,
-        tasksByStatus,
-        completeTask,
-        snoozeTask,
-        skipTask,
-        refetch: refetchTasks
-    } = tasksHookResult;
-
-    // 6. Gérer le chargement des tâches
     if (tasksLoading) {
         return (
             <AppLayout activeHousehold={householdName || "Chargement..."}>
@@ -122,7 +231,6 @@ const Dashboard = () => {
         );
     }
 
-    // 7. Gérer l'erreur de chargement des tâches
     if (tasksError) {
         return (
             <AppLayout activeHousehold={householdName || "Erreur"}>
@@ -140,43 +248,6 @@ const Dashboard = () => {
         );
     }
 
-    // Helper function to convert API task to TaskCard format
-    const convertTaskForCard = (task: any) => ({
-        id: task.id,
-        title: task.definition_title || task.task_title || 'Tâche sans titre',
-        description: task.definition_description || task.task_description || '',
-        room: task.room_name || 'Aucune pièce',
-        assignee: task.assigned_user_name || task.assigned_user_email || 'Non assigné',
-        estimatedDuration: task.estimated_minutes || 0,
-        status: task.status === 'done' ? 'completed' as const :
-            task.status === 'overdue' ? 'overdue' as const :
-                'todo' as const,
-        dueTime: task.due_at ? new Date(task.due_at).toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit'
-        }) : '',
-        completedAt: task.status === 'done' ? 'Terminé' : undefined,
-        recurrence: 'Récurrent'
-    });
-
-    const handleCreateTask = async (taskData: any) => {
-        if (!householdId) {
-            alert("Aucun foyer sélectionné pour créer la tâche.");
-            return;
-        }
-        console.log('handleCreateTask appelé avec:', taskData);
-        try {
-            console.log('Appel de taskService.createTask...');
-            const result = await taskService.createTask(householdId, taskData);
-            console.log('Résultat de la création:', result);
-            await refetchTasks();
-            console.log('Données rafraîchies');
-        } catch (error: any) {
-            console.error('Erreur lors de la création de la tâche:', error);
-            alert('Erreur lors de la création de la tâche: ' + error.message);
-        }
-    };
-
     const completedTasks = tasksByStatus?.completed || [];
     const overdueTasks = tasksByStatus?.overdue || [];
     const todoTasks = tasksByStatus?.todo || [];
@@ -186,11 +257,10 @@ const Dashboard = () => {
         <AppLayout activeHousehold={householdName || "Foyer"}>
             <div className="container mx-auto px-4">
                 <EmailVerificationBanner />
-                <IntegrationStatus />
             </div>
 
             <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
-                {/* Today Overview Card */}
+                {/* Overview */}
                 <Card className="mb-6 shadow-sm border-0 bg-white">
                     <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
@@ -202,22 +272,22 @@ const Dashboard = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="text-center">
+                            <button className="text-center cursor-pointer" onClick={() => todayRef.current?.scrollIntoView({ behavior: 'smooth' })}>
                                 <div className="text-2xl font-bold text-gray-900">{todayStats?.total || 0}</div>
                                 <div className="text-sm text-gray-600">Total des tâches</div>
-                            </div>
-                            <div className="text-center">
+                            </button>
+                            <button className="text-center cursor-pointer" onClick={() => completedRef.current?.scrollIntoView({ behavior: 'smooth' })}>
                                 <div className="text-2xl font-bold text-green-600">{todayStats?.completed || 0}</div>
                                 <div className="text-sm text-gray-600">Terminées</div>
-                            </div>
-                            <div className="text-center">
+                            </button>
+                            <button className="text-center cursor-pointer" onClick={() => overdueRef.current?.scrollIntoView({ behavior: 'smooth' })}>
                                 <div className="text-2xl font-bold text-orange-600">{todayStats?.overdue || 0}</div>
                                 <div className="text-sm text-gray-600">En retard</div>
-                            </div>
-                            <div className="text-center">
+                            </button>
+                            <button className="text-center cursor-pointer" onClick={() => todayRef.current?.scrollIntoView({ behavior: 'smooth' })}>
                                 <div className="text-2xl font-bold text-blue-600">{todayStats?.todo || 0}</div>
                                 <div className="text-sm text-gray-600">Restantes</div>
-                            </div>
+                            </button>
                         </div>
 
                         <div className="space-y-2">
@@ -232,37 +302,35 @@ const Dashboard = () => {
 
                 {/* Quick Actions */}
                 <div className="flex gap-3 mb-6 overflow-x-auto pb-2">
-                    <Button
-                        className="w-full sm:w-auto"
-                        onClick={() => setShowNewTaskModal(true)}
-                    >
+                    <Button className="w-full sm:w-auto" onClick={() => setShowNewTaskModal(true)}>
                         <Plus className="w-4 h-4 mr-2" />
                         Nouvelle tâche
                     </Button>
 
-                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50">
+                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50" onClick={() => navigate('/calendar')}>
                         <Calendar className="h-4 w-4 mr-2" />
                         Calendrier
                     </Button>
-                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50">
+                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50" onClick={() => navigate('/statistics')}>
                         <BarChart3 className="h-4 w-4 mr-2" />
                         Statistiques
                     </Button>
-                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50">
+                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50" onClick={() => navigate('/profile')}>
                         <Settings className="h-4 w-4 mr-2" />
                         Paramètres
+                    </Button>
+                    <Button variant="outline" className="flex-shrink-0 border-gray-200 hover:bg-gray-50" onClick={() => { refetchTasks(); fetchDefinitions(); }}>
+                        Rafraîchir
                     </Button>
                 </div>
 
                 {/* Overdue Tasks */}
                 {overdueTasks.length > 0 && (
-                    <div className="mb-6">
+                    <div className="mb-6" ref={overdueRef}>
                         <div className="flex items-center gap-2 mb-4">
                             <AlertTriangle className="h-5 w-5 text-orange-600" />
                             <h2 className="text-lg font-semibold text-gray-900">Tâches en retard</h2>
-                            <Badge variant="destructive" className="bg-orange-100 text-orange-800 border-orange-200">
-                                {overdueTasks.length}
-                            </Badge>
+                            <Badge variant="destructive" className="bg-orange-100 text-orange-800 border-orange-200">{overdueTasks.length}</Badge>
                         </div>
                         <div className="space-y-3">
                             {overdueTasks.map(task => (
@@ -279,7 +347,7 @@ const Dashboard = () => {
                 )}
 
                 {/* Today's Tasks */}
-                <div className="mb-6">
+                <div className="mb-6" ref={todayRef}>
                     <div className="flex items-center gap-2 mb-4">
                         <Clock className="h-5 w-5 text-blue-600" />
                         <h2 className="text-lg font-semibold text-gray-900">Tâches d'aujourd'hui</h2>
@@ -307,40 +375,89 @@ const Dashboard = () => {
 
                 {/* Completed Tasks */}
                 {completedTasks.length > 0 && (
-                    <div>
+                    <div ref={completedRef}>
                         <div className="flex items-center gap-2 mb-4">
                             <CheckCircle2 className="h-5 w-5 text-green-600" />
                             <h2 className="text-lg font-semibold text-gray-900">Terminées aujourd'hui</h2>
-                            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">
-                                {completedTasks.length}
-                            </Badge>
+                            <Badge variant="secondary" className="bg-green-50 text-green-700 border-green-200">{completedTasks.length}</Badge>
                         </div>
                         <div className="space-y-3">
                             {completedTasks.map(task => (
-                                <TaskCard
-                                    key={task.id}
-                                    task={convertTaskForCard(task)}
-                                />
+                                <TaskCard key={task.id} task={convertTaskForCard(task)} />
                             ))}
                         </div>
                     </div>
                 )}
 
-                {/* Empty state when no tasks at all for a valid household */}
+                {/* Empty state */}
                 {todayTasks.length === 0 && overdueTasks.length === 0 && todoTasks.length === 0 && completedTasks.length === 0 && (
                     <div className="text-center py-12 text-gray-500">
                         <Calendar className="h-16 w-16 mx-auto mb-4 text-gray-300" />
                         <h3 className="text-xl font-medium mb-2">Aucune tâche pour aujourd'hui</h3>
                         <p className="text-sm mb-4">Profitez de votre journée libre ou ajoutez de nouvelles tâches !</p>
-                        <Button
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                            onClick={() => setShowNewTaskModal(true)}
-                        >
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setShowNewTaskModal(true)}>
                             <Plus className="h-4 w-4 mr-2" />
                             Ajouter une tâche
                         </Button>
                     </div>
                 )}
+
+                {/* All Tasks (Definitions) Table */}
+                <Card className="mt-8 shadow-sm border-0 bg-white">
+                    <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-lg font-semibold text-gray-900">Toutes les tâches</CardTitle>
+                            <Badge variant="secondary" className="bg-gray-50 text-gray-700 border-gray-200">{defs.length}</Badge>
+                        </div>
+                        <div className="mt-3">
+                            <Input placeholder="Rechercher par titre, pièce..." value={defsSearch} onChange={(e) => setDefsSearch(e.target.value)} />
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {defsLoading ? (
+                            <div className="text-center py-8 text-gray-500">Chargement des tâches...</div>
+                        ) : defsError ? (
+                            <div className="text-center py-8 text-red-600">{defsError}</div>
+                        ) : defs.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                Aucune tâche définie pour ce foyer.
+                                <div className="mt-3">
+                                    <Button onClick={() => setShowNewTaskModal(true)}>Créer une tâche</Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead className="cursor-pointer" onClick={() => { setSortKey('title'); setSortDir(sortKey === 'title' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Titre {sortKey === 'title' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
+                                        <TableHead className="cursor-pointer" onClick={() => { setSortKey('room_name'); setSortDir(sortKey === 'room_name' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Pièce {sortKey === 'room_name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
+                                        <TableHead className="cursor-pointer" onClick={() => { setSortKey('estimated_minutes'); setSortDir(sortKey === 'estimated_minutes' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Durée estimée {sortKey === 'estimated_minutes' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
+                                        <TableHead>Statut</TableHead>
+                                        <TableHead className="cursor-pointer" onClick={() => { setSortKey('next_occurrence'); setSortDir(sortKey === 'next_occurrence' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Prochaine Occurence {sortKey === 'next_occurrence' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
+                                        <TableHead className="cursor-pointer" onClick={() => { setSortKey('created_at'); setSortDir(sortKey === 'created_at' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Créée le {sortKey === 'created_at' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {sortedFilteredDefs.map((d) => (
+                                        <TableRow key={d.id}>
+                                            <TableCell className="font-medium">{d.title}</TableCell>
+                                            <TableCell>{d.room_name ?? '—'}</TableCell>
+                                            <TableCell>{typeof d.estimated_minutes === 'number' ? `${d.estimated_minutes} min` : '—'}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">
+                                                    {d.recurrence_rule?.toUpperCase().includes('COUNT=1') ? 'Unique' : 'Récurrente'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>{nextDates[d.id] ? new Date(nextDates[d.id] as string).toLocaleDateString('fr-FR') : '—'}</TableCell>
+                                            <TableCell>{new Date(d.created_at).toLocaleDateString('fr-FR')}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                                <TableCaption>Liste des définitions de tâches du foyer</TableCaption>
+                            </Table>
+                        )}
+                    </CardContent>
+                </Card>
             </main>
 
             <NewTaskModal

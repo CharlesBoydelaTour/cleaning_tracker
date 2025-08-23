@@ -10,19 +10,21 @@ import {
   Crown,
   Trash2,
 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/components/AppLayout';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { householdsService } from '@/services/households.service';
 import type { Household, HouseholdMember, Room } from '@/types';
 
 const HouseholdDetail = () => {
   const { id } = useParams();
   const householdId = id as string;
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('members');
 
   const householdQuery = useQuery<Household>({
@@ -225,10 +227,49 @@ const HouseholdDetail = () => {
 
                 <div className="pt-4 border-t">
                   <h3 className="text-sm font-medium text-gray-900 mb-4">Danger Zone</h3>
-                  <Button variant="destructive" className="bg-red-600 hover:bg-red-700">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete Household
-                  </Button>
+                  <div className="flex flex-wrap gap-3">
+                    <Button
+                      variant="outline"
+                      className="border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={async () => {
+                        if (!confirm('Voulez-vous vraiment quitter ce foyer ?')) return;
+                        try {
+                          await householdsService.leave(householdId);
+                          // Invalider les listes et rediriger vers /households
+                          queryClient.invalidateQueries({ queryKey: ['households'] });
+                          navigate('/households');
+                        } catch (e: any) {
+                          alert(e?.response?.data?.detail || "Impossible de quitter le foyer");
+                        }
+                      }}
+                    >
+                      Quitter le foyer
+                    </Button>
+
+                    <Button
+                      variant="destructive"
+                      className="bg-red-600 hover:bg-red-700"
+                      onClick={async () => {
+                        if (!confirm('Supprimer définitivement ce foyer et toutes ses données ?')) return;
+                        try {
+                          await householdsService.delete(householdId);
+                          // Nettoyage caches liés
+                          queryClient.invalidateQueries({ queryKey: ['households'] });
+                          queryClient.removeQueries({ queryKey: ['household', householdId] });
+                          queryClient.removeQueries({ queryKey: ['household', householdId, 'members'] });
+                          queryClient.removeQueries({ queryKey: ['household', householdId, 'rooms'] });
+                          // Redirection
+                          navigate('/households');
+                        } catch (e: any) {
+                          const detail = e?.response?.data?.detail || e?.message;
+                          alert(detail || 'Suppression impossible');
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Household
+                    </Button>
+                  </div>
                   <p className="text-xs text-gray-500 mt-2">
                     This action cannot be undone. This will permanently delete the household and all associated data.
                   </p>

@@ -1,17 +1,23 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Home, Plus } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AppLayout from '@/components/AppLayout';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { householdsService } from '@/services/households.service';
 import { useCurrentHousehold } from '@/hooks/use-current-household';
 import type { Household } from '@/types';
 
 const Households = () => {
-  const { householdName } = useCurrentHousehold();
+  const navigate = useNavigate();
+  const { householdName, selectHousehold, refetch: refetchCurrent } = useCurrentHousehold();
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
   const {
     data: households = [],
     isLoading,
@@ -22,12 +28,31 @@ const Households = () => {
     queryFn: householdsService.getAll,
   });
 
+  const onCreate = async () => {
+    if (!newName.trim()) return;
+    setCreating(true);
+    try {
+      const created = await householdsService.create({ name: newName.trim() });
+      setOpen(false);
+      setNewName('');
+      await refetch();
+      // Sélectionner ce nouveau foyer et naviguer vers sa page
+      if (created?.id) {
+        selectHousehold(created.id);
+        await refetchCurrent();
+        navigate(`/households/${created.id}`);
+      }
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <AppLayout activeHousehold={householdName ?? undefined}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">My Households</h1>
-          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Create Household
           </Button>
@@ -74,12 +99,35 @@ const Households = () => {
             <Home className="h-16 w-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-900 mb-2">No households yet</h3>
             <p className="text-gray-600 mb-6">Create your first household to start organizing chores.</p>
-            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white" onClick={() => setOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Your First Household
             </Button>
           </div>
         )}
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create a household</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <Input
+                placeholder="Household name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onCreate(); }}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button onClick={onCreate} disabled={creating || !newName.trim()}>
+                {creating ? 'Creating…' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </AppLayout>
   );

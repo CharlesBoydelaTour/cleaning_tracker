@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.schemas.member import HouseholdMemberCreate, HouseholdMember, HouseholdMemberUpdate, HouseholdMemberInvite # HouseholdMember est déjà importé
 from app.services.member_service import invite_member_to_household
+from app.services.invite_service import create_invite, dispatch_invite, get_invite_by_token, mark_invite_status
 from app.core.database import (
     get_household_members,
     get_household_member,
@@ -165,8 +166,74 @@ async def add_household_member(
             detail="Une erreur interne est survenue lors de l'ajout du membre.",
         )
 
+@router.post("/{household_id}/members/invite2", status_code=status.HTTP_201_CREATED)
+async def invite_member(
+    household_id: UUID,
+    invite: HouseholdMemberInvite,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user),
+):
+    """Nouvelle invitation avec token + email (compte existant ou non)."""
+    user_id = current_user["id"]
 
-@router.post("/{household_id}/members/invite", response_model=HouseholdMember, status_code=status.HTTP_201_CREATED)
+    # Vérifier accès et permission
+    has_access = await check_household_access(db_pool, household_id, user_id)
+    if not has_access:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    has_perm = await check_member_permissions(db_pool, household_id, user_id, "manage_members")
+    if not has_perm:
+        raise HTTPException(status_code=403, detail="Permission insuffisante")
+
+    inv, created = await create_invite(db_pool, household_id, invite.email, invite.role, user_id)
+    if created:
+        await dispatch_invite(db_pool, inv)
+        return {"status": "created"}
+    else:
+        return {"status": "already_pending"}
+
+
+# Legacy (superseded by app.routers.invites)
+@router.post("/{household_id}/legacy/invites/{token}/accept")
+async def accept_invite(
+    household_id: UUID,
+    token: str,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user),
+):
+    inv = await get_invite_by_token(db_pool, token)
+    if not inv or inv.get("household_id") != household_id:
+        raise HTTPException(status_code=404, detail="Invitation introuvable")
+    if inv.get("status") != "pending":
+        raise HTTPException(status_code=410, detail="Invitation non valide")
+
+    # Expiration
+    expires_at = inv.get("expires_at")
+    if expires_at and expires_at < __import__("datetime").datetime.now(__import__("datetime").timezone.utc):
+        await mark_invite_status(db_pool, token, "expired")
+        raise HTTPException(status_code=410, detail="Invitation expirée")
+
+    # Email doit correspondre au compte connecté
+    if (inv.get("email") or "").lower() != (current_user.get("email") or "").lower():
+        raise HTTPException(status_code=403, detail="L'email ne correspond pas à l'invitation")
+
+    # Ajouter le membre (idempotent côté DB)
+    try:
+        new_member = await create_household_member(
+            db_pool,
+            household_id=household_id,
+            user_id=current_user["id"],
+            role=inv.get("role", "member"),
+        )
+    except ValueError:
+        # déjà membre
+        new_member = None
+
+    await mark_invite_status(db_pool, token, "accepted")
+    return new_member or {"status": "already-member"}
+
+
+# Legacy (superseded by app.routers.invites)
+@router.post("/{household_id}/members/invite-legacy", response_model=HouseholdMember, status_code=status.HTTP_201_CREATED)
 async def invite_household_member(
     household_id: UUID,
     invite_data: HouseholdMemberInvite,

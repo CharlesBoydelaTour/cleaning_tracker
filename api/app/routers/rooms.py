@@ -4,6 +4,7 @@ from app.core.database import (
     get_rooms,
     get_room,
     create_room,
+    delete_room,
 )
 import asyncpg
 from app.routers.households import get_db_pool, check_household_access
@@ -122,4 +123,49 @@ async def add_room(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la création de la pièce: {str(e)}",
+        )
+
+
+@router.delete("/{household_id}/rooms/{room_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_room(
+    household_id: UUID,
+    room_id: UUID,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    user_id: str = None,  # Dans un vrai système, cela viendrait d'un token JWT
+):
+    """
+    Supprime une pièce d'un ménage.
+    """
+    try:
+        # Vérifier l'accès si user_id fourni
+        if user_id:
+            has_access = await check_household_access(db_pool, household_id, user_id)
+            if not has_access:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Vous n'avez pas accès à ce ménage",
+                )
+
+        try:
+            deleted = await delete_room(db_pool, household_id, room_id)
+        except asyncpg.ForeignKeyViolationError:
+            # Des tâches référencent encore cette pièce
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La pièce ne peut pas être supprimée car elle est encore référencée par des tâches.",
+            )
+
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pièce introuvable dans ce ménage",
+            )
+
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la suppression de la pièce: {str(e)}",
         )

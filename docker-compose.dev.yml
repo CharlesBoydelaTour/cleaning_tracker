@@ -9,6 +9,11 @@ services:
     environment:
       ENVIRONMENT: development
       REDIS_URL: redis://redis:6379/0
+      PREFER_IPV4: "1"
+      DB_OPTIONAL: "1"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - ./api:/app
       - /app/.venv
@@ -18,6 +23,8 @@ services:
     depends_on:
       - redis
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
 
   celery_worker:
     build: ./api
@@ -28,6 +35,11 @@ services:
     environment:
       ENVIRONMENT: development
       REDIS_URL: redis://redis:6379/0
+      PREFER_IPV4: "1"
+      DB_OPTIONAL: "0"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     volumes:
       - ./api:/app
       - /app/.venv
@@ -36,6 +48,8 @@ services:
       - api
       - redis
     command: celery -A app.core.celery_app worker --loglevel=debug --concurrency=1
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
 
   redis:
     image: redis:7-alpine
@@ -50,15 +64,15 @@ services:
     build: ./front
     container_name: ct_front
     environment:
-      VITE_API_URL: http://api:8000
+      VITE_API_URL: http://localhost:8000
     volumes:
       - ./front:/app
       - /app/node_modules
     ports:
-      - "8080:8080"
+      - "5173:5173"
     depends_on:
       - api
-    command: bun run dev --host 0.0.0.0
+    command: pnpm dev --host 0.0.0.0
 
 volumes:
   redis_data:

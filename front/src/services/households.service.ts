@@ -60,5 +60,13 @@ export const householdsService = {
       data
     );
     return response.data;
+  },
+
+  async leave(householdId: string): Promise<void> {
+    await apiClient.post(`/households/${householdId}/leave`);
+  },
+
+  async delete(householdId: string): Promise<void> {
+    await apiClient.delete(`/households/${householdId}`);
   }
 };

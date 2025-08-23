@@ -55,6 +55,9 @@ class TaskDefinitionBase(BaseModel):
 
 class TaskDefinitionCreate(TaskDefinitionBase):
     household_id: Optional[UUID] = None  # None pour les tâches du catalogue global
+    # Optionnel: date de départ souhaitée pour la première occurrence
+    # Si fournie, l'API pourra générer une occurrence à cette date après création
+    start_date: Optional[date] = None
 
     @model_validator(mode="after")
     def validate_household_for_catalog(self) -> "TaskDefinitionCreate":
@@ -97,6 +100,13 @@ class TaskDefinition(TaskDefinitionBase):
     household_id: Optional[UUID]
     created_by: Optional[UUID]
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TaskDefinitionWithRoom(TaskDefinition):
+    """Définition de tâche enrichie avec le nom de la pièce."""
+    room_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

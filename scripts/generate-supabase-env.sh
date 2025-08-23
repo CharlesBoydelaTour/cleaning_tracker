@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+#!/usr/bin/env bash
+set -euo pipefail
+
 OUT_FILE="api/.supabase.env"
 
 if ! command -v supabase >/dev/null 2>&1; then
@@ -8,10 +11,13 @@ if ! command -v supabase >/dev/null 2>&1; then
   exit 1
 fi
 
-# Démarre supabase si pas lancé
-supabase status >/dev/null 2>&1 || supabase start >/dev/null
+# Ne démarrer Supabase local que si explicitement demandé
+USE_LOCAL_SUPABASE=${USE_LOCAL_SUPABASE:-0}
+if [ "$USE_LOCAL_SUPABASE" = "1" ]; then
+  supabase status >/dev/null 2>&1 || supabase start >/dev/null
+fi
 
-STATUS=$(supabase status)
+STATUS=$(supabase status || true)
 SERVICE_KEY=$(echo "$STATUS" | grep 'service_role key:' | awk '{print $NF}')
 ANON_KEY=$(echo "$STATUS" | grep 'anon key:' | awk '{print $NF}')
 API_URL=$(echo "$STATUS" | grep 'API URL:' | awk '{print $NF}')
