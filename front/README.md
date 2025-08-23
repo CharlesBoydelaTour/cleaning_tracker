@@ -71,3 +71,11 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+ 
+## Invitations
+
+Une page publique `/accept-invite` gère l’acceptation d’une invitation via un lien du type:
+
+- `/accept-invite?hid=<household_id>&token=<invite_token>`
+
+Si l’utilisateur n’est pas authentifié, il sera redirigé vers la page de login avec un `redirect` vers le lien d’origine. L’API appelée est `POST /households/:hid/invites/:token/accept`.

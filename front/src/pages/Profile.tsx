@@ -12,13 +12,18 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { authService } from '@/services/auth.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { invitesService, type UserInvite } from '@/services/invites.service';
+import { useCurrentHousehold } from '@/hooks/use-current-household';
 
 const Profile = () => {
   const { toast } = useToast();
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { householdName, refetch: refetchHousehold } = useCurrentHousehold();
   const [isDeleting, setIsDeleting] = useState(false);
-  const [activeHousehold] = useState("The Smith Family");
+  const [activeHousehold] = useState<string | undefined>(undefined);
   const [profile, setProfile] = useState({
     name: 'Sarah Smith',
     email: 'sarah@example.com'
@@ -33,6 +38,38 @@ const Profile = () => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+
+  // Invites: list + actions
+  const { data: invites = [], isLoading: invitesLoading, isError: invitesError, refetch: refetchInvites } = useQuery<UserInvite[]>({
+    queryKey: ['my-invites'],
+    queryFn: invitesService.listMine,
+  });
+
+  const acceptInviteMutation = useMutation({
+    mutationFn: (inviteId: string) => invitesService.accept(inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-invites'] });
+      // Mettre à jour le foyer courant et listes associées
+      refetchHousehold();
+      toast({ title: 'Invitation acceptée', description: 'Vous avez rejoint le foyer.' });
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail || error?.message;
+      toast({ title: 'Erreur', description: detail || "Impossible d'accepter l'invitation.", variant: 'destructive' });
+    }
+  });
+
+  const declineInviteMutation = useMutation({
+    mutationFn: (inviteId: string) => invitesService.decline(inviteId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['my-invites'] });
+      toast({ title: 'Invitation déclinée', description: "L'invitation a été retirée." });
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.detail || error?.message;
+      toast({ title: 'Erreur', description: detail || "Impossible de refuser l'invitation.", variant: 'destructive' });
+    }
+  });
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,13 +144,68 @@ const Profile = () => {
   };
 
   return (
-    <AppLayout activeHousehold={activeHousehold}>
+    <AppLayout activeHousehold={householdName || activeHousehold}>
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="max-w-2xl space-y-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Profile & Settings</h1>
             <p className="text-gray-600">Manage your account and preferences</p>
           </div>
+
+          {/* Pending Invitations */}
+          <Card className="shadow-sm border-0 bg-white">
+            <CardHeader>
+              <CardTitle className="text-lg font-semibold text-gray-900">
+                Pending Household Invitations
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {invitesLoading && (
+                <div className="text-gray-600">Loading invites...</div>
+              )}
+              {invitesError && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-red-600">Failed to load invites.</span>
+                  <Button variant="outline" size="sm" onClick={() => refetchInvites()}>
+                    Retry
+                  </Button>
+                </div>
+              )}
+              {!invitesLoading && !invitesError && invites.length === 0 && (
+                <p className="text-gray-600">No pending invitations.</p>
+              )}
+              {!invitesLoading && !invitesError && invites.length > 0 && (
+                <div className="space-y-3">
+                  {invites.map((inv) => (
+                    <div key={inv.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-md">
+                      <div>
+                        <p className="font-medium text-gray-900">{inv.household_name}</p>
+                        <p className="text-sm text-gray-600">Role: {inv.role}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-blue-600 hover:bg-blue-700 text-white"
+                          disabled={acceptInviteMutation.isPending}
+                          onClick={() => acceptInviteMutation.mutate(inv.id)}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={declineInviteMutation.isPending}
+                          onClick={() => declineInviteMutation.mutate(inv.id)}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Personal Information */}
           <Card className="shadow-sm border-0 bg-white">

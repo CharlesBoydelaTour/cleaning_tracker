@@ -4,11 +4,25 @@
 echo "🚀 Démarrage en mode DÉVELOPPEMENT LOCAL"
 export ENVIRONMENT=development
 
-# Démarrer Supabase (si pas déjà démarré)
-# Cette commande s'assure que les services Supabase sont lancés.
-# Si les services sont déjà en cours, elle ne fait généralement rien ou affiche un message.
-echo " memastikan layanan Supabase dimulai..." # Ensuring Supabase services are started...
-supabase start
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Option: démarrer Supabase local uniquement si explicitement demandé
+# Exportez USE_LOCAL_SUPABASE=1 pour activer le démarrage local via Supabase CLI.
+USE_LOCAL_SUPABASE=${USE_LOCAL_SUPABASE:-0}
+
+if [ "$USE_LOCAL_SUPABASE" = "1" ]; then
+  # Démarrer Supabase (si pas déjà démarré)
+  # Cette commande s'assure que les services Supabase sont lancés.
+  echo "🔧 Lancement de Supabase local (USE_LOCAL_SUPABASE=1)"
+  echo " memastikan layanan Supabase dimulai..." # Ensuring Supabase services are started...
+  supabase start
+else
+  echo "⏭️  Supabase local désactivé (USE_LOCAL_SUPABASE!=1). Passage en mode Supabase cloud si variables fournies."
+fi
+
+# Attendre un court instant pour s'assurer que les services sont stabilisés
+# et que `supabase status` peut récupérer les informations correctement.
 
 # Attendre un court instant pour s'assurer que les services sont stabilisés
 # et que `supabase status` peut récupérer les informations correctement.

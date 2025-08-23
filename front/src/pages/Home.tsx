@@ -27,6 +27,8 @@ const Home = () => {
         error: householdError,
         refetch: refetchHousehold
     } = useCurrentHousehold();
+    // Si jamais l’utilisateur arrive ici via un lien d’invitation sans passer par /accept-invite,
+    // on pourrait détecter les query params et rediriger. L’implémentation dédiée existe déjà.
 
     const [showCreateRoomModal, setShowCreateRoomModal] = useState(false);
     const [showCreateHouseholdModal, setShowCreateHouseholdModal] = useState(false);
@@ -81,7 +83,16 @@ const Home = () => {
         },
         onError: (error: any) => {
             console.error('Erreur lors de la suppression de la pièce:', error);
-            alert('Erreur lors de la suppression de la pièce');
+            const status = error?.response?.status;
+            if (status === 409) {
+                alert("Impossible de supprimer la pièce car elle est encore référencée par des tâches. Supprimez ou modifiez ces tâches d'abord.");
+            } else if (status === 404) {
+                alert("Pièce introuvable ou déjà supprimée.");
+            } else if (status === 403) {
+                alert("Vous n'avez pas les droits pour supprimer cette pièce.");
+            } else {
+                alert('Erreur lors de la suppression de la pièce');
+            }
         }
     });
 
@@ -89,13 +100,19 @@ const Home = () => {
     const inviteMemberMutation = useMutation({
         mutationFn: (memberData: { email: string; role: 'admin' | 'member' }) =>
             membersService.invite(householdId!, memberData.email, memberData.role),
-        onSuccess: () => {
+        onSuccess: (data) => {
+            if (data.status === 'already_pending') {
+                alert("Une invitation est déjà en attente pour cet email.");
+            } else {
+                alert("Invitation envoyée.");
+            }
             queryClient.invalidateQueries({ queryKey: ['members', householdId] });
             setShowInviteMemberModal(false);
         },
         onError: (error: any) => {
             console.error('Erreur lors de l\'invitation du membre:', error);
-            alert('Erreur lors de l\'invitation du membre');
+            const detail = error?.response?.data?.detail || error?.message;
+            alert(detail || 'Erreur lors de l\'invitation du membre');
         }
     });
 
@@ -132,6 +149,11 @@ const Home = () => {
     const handleCreateRoom = (roomData: { name: string; icon?: string }) => {
         console.log('handleCreateRoom appelé avec:', roomData);
         console.log('householdId:', householdId);
+        if (!householdId) {
+            alert("Veuillez d'abord créer un ménage avant d'ajouter une pièce.");
+            setShowCreateHouseholdModal(true);
+            return;
+        }
         createRoomMutation.mutate(roomData);
     };
 
@@ -205,6 +227,25 @@ const Home = () => {
         return '🏠'; // Icône par défaut
     };
 
+    // Si aucun ménage n'est sélectionné/créé, afficher l'écran de bienvenue
+    if (!householdLoading && !householdId) {
+        return (
+            <AppLayout activeHousehold={"Foyer"}>
+                <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
+                    <WelcomeScreen onCreateHousehold={() => setShowCreateHouseholdModal(true)} />
+                </main>
+                <CreateHouseholdModal
+                    open={showCreateHouseholdModal}
+                    onOpenChange={setShowCreateHouseholdModal}
+                    onSuccess={() => {
+                        setShowCreateHouseholdModal(false);
+                        refetchHousehold();
+                    }}
+                />
+            </AppLayout>
+        );
+    }
+
     return (
         <AppLayout activeHousehold={householdName || "Foyer"}>
             <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
@@ -236,7 +277,8 @@ const Home = () => {
                             </div>
                             <Button
                                 onClick={() => setShowCreateRoomModal(true)}
-                                className="bg-blue-600 hover:bg-blue-700"
+                                disabled={!householdId}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Ajouter une pièce
@@ -439,6 +481,15 @@ const Home = () => {
                 onClose={() => setShowInviteMemberModal(false)}
                 onSubmit={handleInviteMember}
                 isLoading={inviteMemberMutation.isPending}
+            />
+            {/* Modal de création de ménage accessible aussi depuis cette page */}
+            <CreateHouseholdModal
+                open={showCreateHouseholdModal}
+                onOpenChange={setShowCreateHouseholdModal}
+                onSuccess={() => {
+                    setShowCreateHouseholdModal(false);
+                    refetchHousehold();
+                }}
             />
         </AppLayout>
     );

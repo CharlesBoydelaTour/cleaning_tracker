@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     sender_name: str = "Cleaning Tracker"
 
     # URL de l'application (pour les liens dans les emails)
-    app_url: str = "https://cleaningtracker.com"
+    app_url: str = os.getenv("APP_URL", "http://localhost:5173")
 
     # Expo push notifications
     expo_access_token: Optional[str] = None

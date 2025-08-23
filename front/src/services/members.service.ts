@@ -26,12 +26,16 @@ export const membersService = {
   },
 
   // Inviter un nouveau membre par email
-  invite: async (householdId: string, email: string, role: 'admin' | 'member' | 'guest' = 'member'): Promise<HouseholdMember> => {
-    const response = await api.post(`/households/${householdId}/members/invite`, { 
-      email, 
-      role 
+  invite: async (
+    householdId: string,
+    email: string,
+    role: 'admin' | 'member' | 'guest' = 'member'
+  ): Promise<{ status: 'created' | 'already_pending' }> => {
+    const response = await api.post(`/households/${householdId}/members/invite`, {
+      email,
+      role,
     });
-    return response.data;
+    return response.data as { status: 'created' | 'already_pending' };
   },
 
   // Mettre à jour le rôle d'un membre

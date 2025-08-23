@@ -24,6 +24,7 @@ interface TaskFormData {
   title: string;
   description: string;
   room_id: string;
+  desired_room_name?: string;
   estimated_minutes: number;
   assigned_to: string;
   recurrence_type: 'once' | 'daily' | 'weekly' | 'monthly';
@@ -61,6 +62,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
     title: '',
     description: '',
     room_id: '',
+    desired_room_name: undefined,
     estimated_minutes: 30,
     assigned_to: 'auto',
     recurrence_type: 'weekly',
@@ -82,12 +84,6 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [membersLoading, setMembersLoading] = useState(false);
   const [membersError, setMembersError] = useState<string | null>(null);
 
-  // Supprimer les données mock pour members
-  // const members = [
-  //   { id: 'user1', name: 'Moi', email: 'me@example.com' },
-  //   { id: 'user2', name: 'Marie Dupont', email: 'marie@example.com' },
-  //   { id: 'user3', name: 'Jean Martin', email: 'jean@example.com' }
-  // ];
 
   useEffect(() => {
     if (isOpen) {
@@ -97,6 +93,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
         title: '',
         description: '',
         room_id: '',
+        desired_room_name: undefined,
         estimated_minutes: 30,
         assigned_to: 'auto',
         recurrence_type: 'weekly',
@@ -113,6 +110,13 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
           try {
             const fetchedRooms = await roomsService.getAll(householdId);
             setRoomsList(fetchedRooms);
+            // Si un template a été sélectionné avant le chargement des rooms,
+            // tenter de mapper desired_room_name -> room_id maintenant
+            setFormData(prev => {
+              if (!prev.desired_room_name || prev.room_id) return prev;
+              const match = fetchedRooms.find(r => r.name === prev.desired_room_name);
+              return match ? { ...prev, room_id: match.id, desired_room_name: undefined } : prev;
+            });
           } catch (error) {
             console.error("Erreur lors de la récupération des pièces:", error);
             setRoomsError("Impossible de charger les pièces. Veuillez réessayer.");
@@ -162,8 +166,9 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       title: template.title,
       description: template.description,
       estimated_minutes: template.duration,
-      // Mettre à jour pour utiliser roomsList
-      room_id: roomsList.find(r => r.name === template.room)?.id || ''
+      // Essayer d'affecter immédiatement, sinon mémoriser le nom pour mappage ultérieur
+      room_id: roomsList.find(r => r.name === template.room)?.id || '',
+      desired_room_name: roomsList.length ? undefined : template.room
     }));
     setCurrentStep(1);
   };
@@ -240,7 +245,10 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
           rrule = 'FREQ=MONTHLY';
           break;
         case 'once':
-          rrule = '';
+          // Le backend exige une RRULE non vide. Encode une tâche unique via COUNT=1
+          // On laisse le moteur générer une seule occurrence à partir de sa logique par défaut (aujourd'hui)
+          // Variante simple et valide iCal: FREQ=DAILY;COUNT=1
+          rrule = 'FREQ=DAILY;COUNT=1';
           break;
       }
 

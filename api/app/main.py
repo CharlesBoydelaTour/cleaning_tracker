@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
-from app.routers import auth, households, members, rooms, task_definitions, task_occurrences, notification_preferences
+from app.routers import auth, households, members, rooms, task_definitions, task_occurrences, notification_preferences, invites, user_invites
 
 import os
 from app.core.database import init_db_pool
@@ -67,6 +67,8 @@ app.include_router(rooms.router, prefix="/households", tags=["rooms"])
 app.include_router(task_definitions.household_router, prefix="/households", tags=["household-task-definitions"])  # Routes de ménage
 app.include_router(task_occurrences.household_router, prefix="/households", tags=["household-task-occurrences"])  # Routes de ménage
 app.include_router(notification_preferences.router, tags=["notification-preferences"])
+app.include_router(invites.router, prefix="/households", tags=["invites"]) 
+app.include_router(user_invites.router)
 
 # Root endpoint
 @app.get("/", tags=["root"])

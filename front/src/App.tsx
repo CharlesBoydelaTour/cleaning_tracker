@@ -22,6 +22,7 @@ import OccurrenceDetail from "./pages/OccurrenceDetail";
 import Profile from "./pages/Profile";
 import Statistics from "./pages/Statistics";
 import NotFound from "./pages/NotFound";
+import AcceptInvite from "./pages/AcceptInvite";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/accept-invite" element={<AcceptInvite />} />
 
             {/* Routes privées */}
             <Route path="/" element={

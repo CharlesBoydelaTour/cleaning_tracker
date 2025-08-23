@@ -1,18 +1,19 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
+import react from "@vitejs/plugin-react";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
+// import { componentTagger } from "lovable-tagger"; // Désactivé pour diagnostiquer boucle import / stack overflow
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
-    port: 8080,
+    host: "0.0.0.0",
+    port: 5173,
   },
   plugins: [
     react(),
-    mode === 'development' &&
-    componentTagger(),
+    // NOTE: Le plugin lovable-tagger semble provoquer une récursion infinie ("Maximum call stack size exceeded").
+    // Pour réactiver après diagnostic : décommentez l'import et la ligne ci-dessous.
+    // mode === 'development' && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {

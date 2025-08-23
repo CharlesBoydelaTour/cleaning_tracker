@@ -5,6 +5,7 @@ from datetime import date
 
 from app.schemas.task import (
     TaskDefinition,
+    TaskDefinitionWithRoom,
     TaskDefinitionCreate,
     TaskDefinitionUpdate,
     TaskOccurrence
@@ -32,7 +33,7 @@ router = APIRouter()
 household_router = APIRouter()  # Nouveau router pour les routes de ménage
 
 
-@router.get("/catalog", response_model=List[TaskDefinition])
+@router.get("/catalog", response_model=List[TaskDefinitionWithRoom])
 async def list_catalog_tasks(
     db_pool: asyncpg.Pool = Depends(get_db_pool),
     room_id: Optional[UUID] = Query(None),
@@ -62,7 +63,7 @@ async def list_catalog_tasks(
         )
 
 
-@household_router.get("/{household_id}/task-definitions", response_model=List[TaskDefinition])
+@household_router.get("/{household_id}/task-definitions", response_model=List[TaskDefinitionWithRoom])
 async def list_household_task_definitions(
     household_id: UUID,
     db_pool: asyncpg.Pool = Depends(get_db_pool),
@@ -105,7 +106,7 @@ async def list_household_task_definitions(
         )
 
 
-@household_router.get("/{household_id}/task-definitions/{task_def_id}", response_model=TaskDefinition)
+@household_router.get("/{household_id}/task-definitions/{task_def_id}", response_model=TaskDefinitionWithRoom)
 async def get_task_definition_details(
     household_id: UUID,
     task_def_id: UUID,
@@ -208,6 +209,20 @@ async def create_household_task_definition(
             is_catalog=False,
             created_by=UUID(current_user["id"])
         )
+        
+        # Optionnel: générer une occurrence à la date de démarrage si fournie
+        try:
+            if task_data.start_date is not None:
+                await generate_occurrences_for_definition(
+                    db_pool,
+                    new_task["id"],
+                    task_data.start_date,
+                    task_data.start_date,
+                    max_occurrences=1
+                )
+        except Exception as _:
+            # Ne pas bloquer la création si la génération initiale échoue
+            pass
         
         return new_task
         

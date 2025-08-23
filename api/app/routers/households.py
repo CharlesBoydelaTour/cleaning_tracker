@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, status, HTTPException
 from app.schemas.household import HouseholdCreate, Household
 from app.core.database import get_households, create_household
 from app.core.exceptions import DatabaseError, UnauthorizedAccess, HouseholdNotFound
@@ -98,6 +98,94 @@ async def get_household(
             operation="récupération du ménage",
             details=str(e),
         )
+
+
+@router.post("/{household_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+async def leave_household(
+    household_id: UUID,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Permet à l'utilisateur courant de quitter un foyer.
+    Si le foyer devient vide, il est supprimé (cascade sur les entités liées).
+    """
+    user_id = current_user["id"]
+    async with db_pool.acquire() as conn:
+        tr = conn.transaction()
+        await tr.start()
+        try:
+            # Vérifier que l'utilisateur est bien membre
+            member_id = await conn.fetchval(
+                """
+                SELECT id FROM household_members
+                WHERE household_id = $1 AND user_id = $2
+                """,
+                household_id,
+                user_id,
+            )
+            if not member_id:
+                raise HTTPException(status_code=404, detail="Vous n'êtes pas membre de ce foyer")
+
+            # Supprimer son appartenance
+            await conn.execute(
+                """
+                DELETE FROM household_members
+                WHERE household_id = $1 AND user_id = $2
+                """,
+                household_id,
+                user_id,
+            )
+
+            # Vérifier si le foyer est vide
+            remaining = await conn.fetchval(
+                """
+                SELECT count(*)::int FROM household_members WHERE household_id = $1
+                """,
+                household_id,
+            )
+            if remaining == 0:
+                await conn.execute(
+                    """
+                    DELETE FROM households WHERE id = $1
+                    """,
+                    household_id,
+                )
+
+            await tr.commit()
+        except Exception:
+            await tr.rollback()
+            raise
+    # 204 No Content
+    return
+
+
+@router.delete("/{household_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_household_endpoint(
+    household_id: UUID,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Supprime un foyer et toutes ses données liées (cascade). Réservé aux administrateurs du foyer.
+    """
+    user_id = current_user["id"]
+    # Vérifier le rôle
+    role = await get_user_role_in_household(db_pool, household_id, user_id)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Seul un administrateur peut supprimer ce foyer")
+
+    async with db_pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM households WHERE id = $1
+            """,
+            household_id,
+        )
+        # result est de type 'DELETE X'
+        if not result or result.split()[-1] == '0':
+            raise HTTPException(status_code=404, detail="Foyer introuvable")
+    return
 
 
 async def check_household_access(

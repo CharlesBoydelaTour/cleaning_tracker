@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { Link, useLocation, Navigate } from 'react-router-dom';
+import { Link, useLocation, Navigate, useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -15,6 +15,7 @@ const Login = () => {
   const [errors, setErrors] = useState<{ email?: string; password?: string; general?: string }>({});
 
   const { login, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
 
   // Rediriger si déjà connecté
@@ -59,6 +60,12 @@ const Login = () => {
 
     try {
       await login({ email, password });
+      // Si un redirect est présent dans l'URL, y rediriger après login
+      const params = new URLSearchParams(location.search);
+      const redirect = params.get('redirect');
+      if (redirect) {
+        navigate(redirect, { replace: true });
+      }
     } catch (error: any) {
       setErrors({ general: error.message });
       // Afficher une alerte pour l'erreur

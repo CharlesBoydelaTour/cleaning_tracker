@@ -21,6 +21,12 @@ Ce document décrit comment lancer l'API FastAPI, le front React (Vite), Redis, 
 docker compose -f docker-compose.dev.yml up --build
 ```
 
+Si vous NE voulez PAS lancer Supabase local et préférez le projet Supabase Cloud:
+
+- Assurez-vous que `api/.env.remote` est sélectionné dans `docker-compose.dev.yml` (c'est déjà le cas par défaut dans ce repo).
+- Les scripts ne démarrent plus Supabase local automatiquement. Pour arrêter une stack locale existante: `supabase stop`.
+- Pour réactiver le Supabase local à la demande, exportez `USE_LOCAL_SUPABASE=1` avant d'exécuter les scripts de dev.
+
 Ensuite:
 
 - Front: <http://localhost:5173>
@@ -66,7 +72,7 @@ Le flux automatisé complet Supabase CLI n'est pas entièrement encapsulé ici (
 	- `SUPABASE_ANON_KEY`
 	- `SERVICE_ROLE_KEY` (ne jamais exposer côté front)
 	- `DATABASE_URL` (string de connexion Postgres fournie par le dashboard)
-2. Dans `docker-compose.dev.yml`, commenter la ligne `.env.dev` et décommenter `.env.remote`.
+2. Dans `docker-compose.dev.yml`, commenter la ligne `.env.dev` et décommenter `.env.remote` (déjà configuré dans ce repo).
 3. Redémarrer:
 
 	```bash

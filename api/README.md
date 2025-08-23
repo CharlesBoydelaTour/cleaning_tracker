@@ -37,8 +37,6 @@ L'API suit une architecture en couches :
 
 - **FastAPI** : Framework web async haute performance
 - **Pydantic** : Validation et sérialisation des données
-- **asyncpg** : Driver PostgreSQL asynchrone
-- **Celery** : Traitement des tâches asynchrones
 - **Redis** : Broker pour Celery et cache
 
 ## 🚀 Installation
@@ -61,6 +59,14 @@ uv sync
 
 # 3. Configurer l'environnement
 cp .env.example .env.dev
+- Invitations (foyers)
+  - POST `/households/{household_id}/members/invite2` { email, role }
+    - Crée une invitation avec token; envoie un email.
+    - Si le compte existe: email avec lien de connexion (magic link) vers `/accept-invite`.
+    - Si le compte n'existe pas: email d'invitation Supabase pour créer le compte, redirigé vers `/accept-invite`.
+  - POST `/households/{household_id}/invites/{token}/accept`
+    - Auth requis. Valide le token et ajoute l'utilisateur au foyer.
+
 # Éditer .env.dev avec vos valeurs
 
 # 4. Lancer les migrations Supabase

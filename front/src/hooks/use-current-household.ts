@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { householdsService } from '@/services/households.service';
 import type { Household } from '@/types';
-import { useAuth } from '@/hooks/use-auth'; // Assurez-vous que useAuth est importé
+import { useAuth } from '@/hooks/use-auth';
+
+const ACTIVE_HOUSEHOLD_KEY = 'active_household_id';
 
 export function useCurrentHousehold() {
   const [currentHousehold, setCurrentHousehold] = useState<Household | null>(null);
+  const [households, setHouseholds] = useState<Household[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth(); // Récupérer l'utilisateur authentifié
@@ -22,15 +25,20 @@ export function useCurrentHousehold() {
     setError(null);
     try {
       // Récupérer les ménages pour l'utilisateur connecté.
-      // L'API /households utilise maintenant l'authentification JWT
-      const households = await householdsService.getAll();
-      
-      if (households.length > 0) {
-        // Le premier ménage de la liste est celui à afficher (tri alphabétique fait par l'API)
-        setCurrentHousehold(households[0]);
+      const all = await householdsService.getAll();
+      setHouseholds(all);
+
+      if (all.length > 0) {
+        // Tenter de restaurer la sélection persistée
+        const savedId = localStorage.getItem(ACTIVE_HOUSEHOLD_KEY);
+        const found = savedId ? all.find(h => h.id === savedId) : null;
+        setCurrentHousehold(found || all[0]);
+        if (!found && all[0]) {
+          localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, all[0].id);
+        }
       } else {
-        // Aucun ménage n'est associé à cet utilisateur
         setCurrentHousehold(null);
+        localStorage.removeItem(ACTIVE_HOUSEHOLD_KEY);
       }
     } catch (err) {
       console.error('Erreur lors de la récupération du ménage:', err);
@@ -45,12 +53,24 @@ export function useCurrentHousehold() {
     fetchCurrentHousehold();
   }, [fetchCurrentHousehold]); // Appeler fetchCurrentHousehold lorsque la fonction (ou ses dépendances) change
 
+  const selectHousehold = useCallback((householdId: string) => {
+    const h = households.find(x => x.id === householdId) || null;
+    setCurrentHousehold(h || null);
+    if (h) {
+      localStorage.setItem(ACTIVE_HOUSEHOLD_KEY, h.id);
+    } else {
+      localStorage.removeItem(ACTIVE_HOUSEHOLD_KEY);
+    }
+  }, [households]);
+
   return {
     currentHousehold,
+    households,
     loading,
     error,
     householdId: currentHousehold?.id || null,
     householdName: currentHousehold?.name || null,
     refetch: fetchCurrentHousehold,
+    selectHousehold,
   };
 }

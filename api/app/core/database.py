@@ -8,6 +8,8 @@ from datetime import date, datetime, timedelta
 from dateutil.rrule import rrulestr
 
 from app.config import settings
+import socket
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from app.schemas.task import TaskStatus
 
 
@@ -21,12 +23,59 @@ async def init_db_pool(optional: bool = False, timeout: float = 10.0):
     Returns:
         asyncpg.Pool ou None si optional et échec.
     """
-    database_url = settings.database_url
+    # Point de départ: URL principale
+    database_url = os.getenv("DATABASE_POOLER_URL") or settings.database_url
     if database_url.startswith("postgresql+asyncpg://"):
         database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
 
+    # S'assurer que sslmode=require est présent (bonne pratique pour Supabase)
     try:
-        return await asyncio.wait_for(asyncpg.create_pool(dsn=database_url), timeout=timeout)
+        parts = urlsplit(database_url)
+        query_pairs = dict(parse_qsl(parts.query, keep_blank_values=True))
+        if query_pairs.get("sslmode") is None:
+            query_pairs["sslmode"] = "require"
+        database_url = urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query_pairs), parts.fragment))
+    except Exception:
+        pass
+
+    # Force IPv4 if requested (default True in Docker where IPv6 route may be unavailable)
+    prefer_ipv4 = os.getenv("PREFER_IPV4", "1") == "1"
+    if prefer_ipv4:
+        try:
+            parts = urlsplit(database_url)
+            host = parts.hostname
+            port = parts.port or 5432
+            if host and not host.replace('.', '').isdigit():
+                # Resolve A record (IPv4)
+                infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+                if infos:
+                    ipv4_addr = infos[0][4][0]
+                    # Rebuild netloc with credentials if any
+                    userinfo = ''
+                    if parts.username:
+                        userinfo += parts.username
+                        if parts.password:
+                            userinfo += f':{parts.password}'
+                        userinfo += '@'
+                    netloc = f"{userinfo}{ipv4_addr}:{port}"
+                    database_url = urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+        except Exception as e:
+            # Best-effort: keep original URL on any failure
+            pass
+
+    # Log minimal sans fuite de secrets
+    try:
+        parts = urlsplit(database_url)
+        logging.info(f"[db] Connecting to {parts.hostname}:{parts.port or 5432} (sslmode=require)")
+    except Exception:
+        pass
+
+    try:
+        # Compatibilité pgbouncer (transaction pooler): pas de prepared statements
+        return await asyncio.wait_for(
+            asyncpg.create_pool(dsn=database_url, statement_cache_size=0),
+            timeout=timeout,
+        )
     except Exception as e:
         if optional:
             logging.warning(f"[db] Impossible de créer le pool (mode optionnel activé): {e}")
@@ -738,41 +787,43 @@ async def create_household(
 ) -> Dict[str, Any]:
     """Créer un nouveau ménage"""
     async with pool.acquire() as conn:
-        household_id = await conn.fetchval(
-            """
-            INSERT INTO households (name, created_at) 
-            VALUES ($1, NOW()) 
-            RETURNING id
-            """,
-            name,
-        )
-
-        if created_by_user_id:
-            user_exists = await conn.fetchval(
-                "SELECT 1 FROM users WHERE id = $1",
-                created_by_user_id
+        async with conn.transaction():
+            household_id = await conn.fetchval(
+                """
+                INSERT INTO households (name, created_at) 
+                VALUES ($1, NOW()) 
+                RETURNING id
+                """,
+                name,
             )
-            
-            if user_exists:
-                await conn.execute(
-                    """
-                    INSERT INTO household_members (household_id, user_id, role) 
-                    VALUES ($1, $2, 'admin')
-                    """,
-                    household_id,
+
+            if created_by_user_id:
+                # Supabase stocke les utilisateurs dans la table auth.users
+                user_exists = await conn.fetchval(
+                    "SELECT 1 FROM auth.users WHERE id = $1",
                     created_by_user_id,
                 )
 
-        household_data = await conn.fetchrow(
-            """
-            SELECT id, name, created_at
-            FROM households 
-            WHERE id = $1
-            """,
-            household_id,
-        )
+                if user_exists:
+                    await conn.execute(
+                        """
+                        INSERT INTO household_members (household_id, user_id, role) 
+                        VALUES ($1, $2, 'admin')
+                        """,
+                        household_id,
+                        created_by_user_id,
+                    )
 
-        return dict(household_data)
+            household_data = await conn.fetchrow(
+                """
+                SELECT id, name, created_at
+                FROM households 
+                WHERE id = $1
+                """,
+                household_id,
+            )
+
+            return dict(household_data)
 
 
 async def get_households(
@@ -818,10 +869,10 @@ async def get_household_members(
                 hm.user_id, 
                 hm.role, 
                 hm.joined_at,
-                u.full_name as user_full_name,  -- Joindre et récupérer le nom complet de l'utilisateur
-                u.email as user_email          -- Joindre et récupérer l'email de l'utilisateur
+        COALESCE(u.raw_user_meta_data->>'full_name', u.email, '') AS user_full_name,
+                u.email AS user_email
             FROM household_members hm
-            JOIN public.users u ON hm.user_id = u.id  -- Jointure avec public.users
+            JOIN auth.users u ON hm.user_id = u.id
             WHERE hm.household_id = $1
             """,
             household_id,
@@ -844,10 +895,10 @@ async def get_household_member(
                 hm.user_id, 
                 hm.role, 
                 hm.joined_at,
-                u.full_name as user_full_name, -- Joindre et récupérer le nom complet de l'utilisateur
-                u.email as user_email         -- Joindre et récupérer l'email de l'utilisateur
+        COALESCE(u.raw_user_meta_data->>'full_name', u.email, '') AS user_full_name,
+                u.email AS user_email
             FROM household_members hm
-            JOIN public.users u ON hm.user_id = u.id -- Jointure avec public.users
+            JOIN auth.users u ON hm.user_id = u.id
             WHERE hm.household_id = $1 AND hm.id = $2
             """,
             household_id,
@@ -1042,3 +1093,38 @@ async def create_room(
         )
 
         return dict(room_data)
+
+
+async def delete_room(
+    pool: asyncpg.Pool,
+    household_id: UUID,
+    room_id: UUID,
+) -> bool:
+    """Supprimer une pièce d'un ménage.
+
+    Retourne True si une ligne a été supprimée, False si la pièce n'existe pas
+    (ou n'appartient pas au ménage donné).
+    Peut lever asyncpg.ForeignKeyViolationError si des enregistrements référencent cette pièce
+    (ex: task_definitions.room_id), auquel cas l'API doit retourner 409.
+    """
+    async with pool.acquire() as conn:
+        # Vérifier l'existence et l'appartenance au ménage
+        existing = await conn.fetchval(
+            """
+            SELECT 1 FROM rooms WHERE id = $1 AND household_id = $2
+            """,
+            room_id,
+            household_id,
+        )
+        if not existing:
+            return False
+
+        result = await conn.execute(
+            """
+            DELETE FROM rooms
+            WHERE id = $1 AND household_id = $2
+            """,
+            room_id,
+            household_id,
+        )
+        return "DELETE 1" in result
