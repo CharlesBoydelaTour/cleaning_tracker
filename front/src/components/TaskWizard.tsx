@@ -380,8 +380,8 @@ export const TaskWizard: React.FC<TaskWizardProps> = ({ mode, householdId, initi
                 </div>
             )}
 
-            {/* Footer */}
-            <div className="flex items-center justify-between pt-2">
+            {/* Footer - sticky at bottom for mobile */}
+            <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-t px-4 py-3 flex items-center justify-between z-10">
                 <div className="flex gap-2">
                     {currentStep > (inEdit ? 1 : 0) && (
                         <Button type="button" variant="outline" onClick={() => setCurrentStep(prev => prev - 1)}>Précédent</Button>
