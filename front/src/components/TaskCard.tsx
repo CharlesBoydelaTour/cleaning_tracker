@@ -31,9 +31,11 @@ interface TaskCardProps {
   task: Task;
   onComplete?: (taskId: number, data?: { duration_minutes?: number; comment?: string; photo_url?: string }) => Promise<void>;
   onEdit?: (definitionId: string) => void;
+  onReopenToday?: (occurrenceId: number) => Promise<void> | void;
+  onDeleteOccurrence?: (occurrenceId: number) => Promise<void> | void;
 }
 
-const TaskCard = ({ task, onComplete, onEdit }: TaskCardProps) => {
+const TaskCard = ({ task, onComplete, onEdit, onReopenToday, onDeleteOccurrence }: TaskCardProps) => {
   const getStatusIcon = () => {
     switch (task.status) {
       case "completed":
@@ -98,6 +100,17 @@ const TaskCard = ({ task, onComplete, onEdit }: TaskCardProps) => {
     } else {
       console.log("Missing definitionId or onEdit handler");
     }
+  };
+
+  const handleReopen = async () => {
+    if (onReopenToday) await onReopenToday(task.id);
+  };
+
+  const handleDelete = async () => {
+    if (!onDeleteOccurrence) return;
+    const ok = confirm('Supprimer définitivement cette occurrence ?');
+    if (!ok) return;
+    await onDeleteOccurrence(task.id);
   };
 
   return (
@@ -198,6 +211,17 @@ const TaskCard = ({ task, onComplete, onEdit }: TaskCardProps) => {
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     Terminer
+                  </Button>
+                </div>
+              )}
+
+              {task.status === "completed" && (
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={handleReopen} className="border-gray-200 hover:bg-gray-50">
+                    Remettre à aujourd'hui
+                  </Button>
+                  <Button size="sm" variant="destructive" onClick={handleDelete}>
+                    Supprimer la tâche
                   </Button>
                 </div>
               )}

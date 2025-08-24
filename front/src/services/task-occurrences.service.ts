@@ -140,6 +140,13 @@ export const taskOccurrencesService = {
   },
 
   /**
+   * Supprimer une occurrence (généralement après complétion si on veut la retirer de la vue)
+   */
+  async delete(occurrenceId: string): Promise<void> {
+    await apiClient.delete(`/occurrences/${occurrenceId}`);
+  },
+
+  /**
    * Générer les occurrences pour un ménage
    */
   async generateForHousehold(

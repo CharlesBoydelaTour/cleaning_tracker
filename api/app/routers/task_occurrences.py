@@ -15,6 +15,7 @@ from app.schemas.task import (
 from app.core.database import (
     get_task_occurrences,
     get_task_occurrence,
+    delete_task_occurrence,
     update_task_occurrence_status,
     complete_task_occurrence,
     generate_occurrences_for_household,
@@ -124,7 +125,8 @@ async def list_household_occurrences(
                 definition_title=occ["task_title"],
                 definition_description=occ.get("task_description"),
                 room_name=occ.get("room_name"),
-                assigned_user_name=occ.get("assigned_user_email")
+                assigned_user_name=occ.get("assigned_user_email"),
+                definition_priority=occ.get("definition_priority")
             )
             enriched_occurrences.append(enriched)
         
@@ -186,7 +188,8 @@ async def get_occurrence_details(
             definition_title=occurrence["task_title"],
             definition_description=occurrence.get("task_description"),
             room_name=occurrence.get("room_name"),
-            assigned_user_name=occurrence.get("assigned_user_email")
+            assigned_user_name=occurrence.get("assigned_user_email"),
+            definition_priority=occurrence.get("definition_priority")
         )
         
     except (UnauthorizedAccess, OccurrenceNotFound):
@@ -504,6 +507,41 @@ async def reopen_occurrence(
         raise
     except Exception as e:
         raise DatabaseError(operation="réouverture de l'occurrence", details=str(e))
+
+
+@router.delete("/occurrences/{occurrence_id}")
+async def delete_occurrence(
+    occurrence_id: UUID,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Supprimer une occurrence. Utilisé pour retirer une occurrence terminée du dashboard.
+    """
+    try:
+        occurrence = await get_task_occurrence(db_pool, occurrence_id)
+        if not occurrence:
+            raise OccurrenceNotFound(occurrence_id=str(occurrence_id))
+
+        household_id = occurrence["household_id"]
+        has_access = await check_household_access(db_pool, household_id, current_user["id"])
+        if not has_access:
+            raise UnauthorizedAccess(resource="occurrence", action="delete")
+
+        success = await delete_task_occurrence(db_pool, occurrence_id)
+        if not success:
+            raise DatabaseError(operation="suppression de l'occurrence", details="Aucune ligne supprimée")
+
+        logger.info(
+            "Occurrence supprimée",
+            extra=with_context(occurrence_id=str(occurrence_id), deleted_by=current_user["id"])
+        )
+        return {"status": "deleted"}
+
+    except (UnauthorizedAccess, OccurrenceNotFound):
+        raise
+    except Exception as e:
+        raise DatabaseError(operation="suppression de l'occurrence", details=str(e))
 
 @household_router.post("/{household_id}/occurrences/generate")
 async def generate_household_occurrences(

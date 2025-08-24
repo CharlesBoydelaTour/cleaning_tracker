@@ -14,6 +14,12 @@ class TaskStatus(str, Enum):
     OVERDUE = "overdue"
 
 
+class PriorityLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 # ============================================================================
 # TASK DEFINITIONS (Templates de tâches)
 # ============================================================================
@@ -27,6 +33,7 @@ class TaskDefinitionBase(BaseModel):
     start_date: Optional[datetime] = Field(None, description="Date de début")
     estimated_minutes: Optional[int] = Field(None, ge=0, description="Temps estimé en minutes")
     is_catalog: bool = Field(False, description="Indique si c'est une tâche du catalogue")
+    priority: Optional[PriorityLevel] = Field(None, description="Priorité de la tâche (low, medium, high)")
 
 
 class TaskDefinitionCreate(TaskDefinitionBase):
@@ -52,6 +59,7 @@ class TaskDefinitionUpdate(BaseModel):
     estimated_minutes: Optional[int] = None
     room_id: Optional[UUID] = None
     start_date: Optional[date] = None
+    priority: Optional[PriorityLevel] = None
 
     model_config = ConfigDict(strict=False)
 
@@ -271,6 +279,7 @@ class TaskOccurrenceWithDefinition(TaskOccurrence):
     definition_description: Optional[str]
     room_name: Optional[str]
     assigned_user_name: Optional[str]
+    definition_priority: Optional[PriorityLevel] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -333,8 +333,15 @@ async def update_task_definition(
         params = [task_def_id]
         param_count = 1
 
-        allowed_fields = ['title', 'description', 'recurrence_rule',
-                          'estimated_minutes', 'room_id', 'start_date']
+        allowed_fields = [
+            'title',
+            'description',
+            'recurrence_rule',
+            'estimated_minutes',
+            'room_id',
+            'start_date',
+            'priority',
+        ]
 
         for field, value in kwargs.items():
             if field in allowed_fields and value is not None:
@@ -488,6 +495,7 @@ async def get_task_occurrences(
                 td.description as task_description,
                 td.estimated_minutes,
                 td.room_id,
+                td.priority as definition_priority,
                 r.name as room_name,
                 u.email as assigned_user_email
             FROM task_occurrences o
@@ -552,6 +560,7 @@ async def get_task_occurrence(
                 td.estimated_minutes,
                 td.room_id,
                 td.household_id,
+                td.priority as definition_priority,
                 r.name as room_name,
                 u.email as assigned_user_email
             FROM task_occurrences o
@@ -564,6 +573,27 @@ async def get_task_occurrence(
         )
         
         return dict(row) if row else None
+
+
+async def delete_task_occurrence(
+    pool: asyncpg.Pool,
+    occurrence_id: UUID
+) -> bool:
+    """
+    Supprimer une occurrence spécifique.
+
+    Retourne True si une ligne a été supprimée, False sinon.
+    """
+    ensure_pool(pool)
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            """
+            DELETE FROM task_occurrences
+            WHERE id = $1
+            """,
+            occurrence_id,
+        )
+        return "DELETE 1" in result
 
 
 async def update_task_occurrence_status(

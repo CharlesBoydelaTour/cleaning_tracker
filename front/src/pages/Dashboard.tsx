@@ -17,6 +17,7 @@ import NewTaskModal from '@/components/NewTaskModal';
 import WelcomeScreen from '@/components/WelcomeScreen';
 import CreateHouseholdModal from '@/components/CreateHouseholdModal';
 import { taskService } from '@/services/api';
+import { taskOccurrencesService } from '@/services/task-occurrences.service';
 import { taskDefinitionsService, type TaskDefinitionListItem } from '@/services/task-definitions.service';
 import { useToast } from '@/hooks/use-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -139,7 +140,7 @@ const Dashboard = () => {
             }) : '',
             completedAt: task.status === 'done' ? 'Terminé' : undefined,
             recurrence: 'Récurrent',
-            priority: (task.priority || task.definition_priority || 'medium') as 'low' | 'medium' | 'high',
+            priority: (task.priority || (task as any).definition_priority || 'medium') as 'low' | 'medium' | 'high',
             definitionId: task.task_id || task.definition_id || task.definitionId
         });
     }
@@ -415,7 +416,29 @@ const Dashboard = () => {
                         </div>
                         <div className="space-y-3">
                             {completedTasks.map(task => (
-                                <TaskCard key={task.id} task={convertTaskForCard(task)} onEdit={(definitionId: string) => navigate(`/tasks/${definitionId}/edit?occurrenceId=${task.id}`)} />
+                                <TaskCard
+                                    key={task.id}
+                                    task={convertTaskForCard(task)}
+                                    onEdit={(definitionId: string) => navigate(`/tasks/${definitionId}/edit?occurrenceId=${task.id}`)}
+                                    onReopenToday={async (occId: number) => {
+                                        try {
+                                            await taskOccurrencesService.reopen(String(occId));
+                                            await refetchTasks();
+                                            toast({ title: "Remise à aujourd'hui", description: 'La tâche est de nouveau à faire aujourd\'hui.' });
+                                        } catch (e: any) {
+                                            toast({ title: 'Erreur', description: e?.message || "Impossible de remettre à aujourd'hui", variant: 'destructive' });
+                                        }
+                                    }}
+                                    onDeleteOccurrence={async (occId: number) => {
+                                        try {
+                                            await taskOccurrencesService.delete(String(occId));
+                                            await refetchTasks();
+                                            toast({ title: 'Occurrence supprimée' });
+                                        } catch (e: any) {
+                                            toast({ title: 'Erreur', description: e?.message || 'Suppression impossible', variant: 'destructive' });
+                                        }
+                                    }}
+                                />
                             ))}
                         </div>
                     </div>
