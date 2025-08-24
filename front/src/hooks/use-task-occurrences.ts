@@ -91,57 +91,19 @@ export function useTaskOccurrences(householdId: string | null) {
     }
   };
 
-  const snoozeTask = async (occurrenceId: string, snoozedUntil: string) => {
+  const reopenTask = async (occurrenceId: string) => {
     try {
-      const updatedTask = await taskOccurrencesService.snooze(occurrenceId, snoozedUntil);
-      
-      // Mettre à jour l'état local
-      setTasks(prevTasks =>
-        prevTasks.map(task =>
-          task.id === occurrenceId
-            ? { ...task, status: updatedTask.status, snoozed_until: updatedTask.snoozed_until }
-            : task
-        )
-      );
-
-      toast({
-        title: 'Tâche reportée',
-        description: 'La tâche a été reportée avec succès',
-      });
+      // Appel direct via service (exposé ailleurs). Ici on ne fait pas d'appel réseau pour garder le hook générique,
+      // on laisse les pages appeler service.reopen puis mettre à jour via ce setter local
+      setTasks(prev => prev.map(t => t.id === occurrenceId ? { ...t, status: 'pending' as TaskStatus, snoozed_until: null } : t));
     } catch (err) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible de reporter la tâche',
-        variant: 'destructive',
-      });
+      // si besoin, on pourrait remonter une erreur
     }
   };
 
-  const skipTask = async (occurrenceId: string, reason?: string) => {
-    try {
-      const updatedTask = await taskOccurrencesService.skip(occurrenceId, reason);
-      
-      // Mettre à jour l'état local
-      setTasks(prevTasks =>
-        prevTasks.map(task =>
-          task.id === occurrenceId
-            ? { ...task, status: updatedTask.status }
-            : task
-        )
-      );
-
-      toast({
-        title: 'Tâche ignorée',
-        description: 'La tâche a été ignorée',
-      });
-    } catch (err) {
-      toast({
-        title: 'Erreur',
-        description: 'Impossible d\'ignorer la tâche',
-        variant: 'destructive',
-      });
-    }
-  };
+  // Reporter/Ignorer désactivés côté UI par demande produit. On garde les fonctions pour usages futurs.
+  const snoozeTask = async (_occurrenceId: string, _snoozedUntil: string) => { /* noop in UI */ };
+  const skipTask = async (_occurrenceId: string, _reason?: string) => { /* noop in UI */ };
 
   useEffect(() => {
     if (householdId) {
@@ -156,6 +118,7 @@ export function useTaskOccurrences(householdId: string | null) {
     fetchTasks,
     fetchTodayTasks,
     completeTask,
+  reopenTask,
     snoozeTask,
     skipTask,
     refetch: fetchTasks,

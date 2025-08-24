@@ -210,17 +210,18 @@ async def create_household_task_definition(
             created_by=UUID(current_user["id"])
         )
         
-        # Optionnel: générer une occurrence à la date de démarrage si fournie
+        # Génération initiale: tenter aujourd'hui (créera celle d'aujourd'hui ou backfillera la dernière manquée)
         try:
-            if task_data.start_date is not None:
-                await generate_occurrences_for_definition(
-                    db_pool,
-                    new_task["id"],
-                    task_data.start_date,
-                    task_data.start_date,
-                    max_occurrences=1
-                )
-        except Exception as _:
+            from datetime import date as _date
+            today = _date.today()
+            await generate_occurrences_for_definition(
+                db_pool,
+                new_task["id"],
+                today,
+                today,
+                max_occurrences=1
+            )
+        except Exception:
             # Ne pas bloquer la création si la génération initiale échoue
             pass
         
@@ -352,6 +353,31 @@ async def update_household_task_definition(
             **update_data
         )
         
+        # Si la start_date a été fournie et est > aujourd'hui, supprimer les occurrences antérieures non faites
+        if 'start_date' in update_data and update_data['start_date'] is not None:
+            from datetime import date as _date
+            new_start = update_data['start_date']
+            # Par sécurité, on supprime celles < new_start (donc y compris aujourd'hui si new_start>aujourd'hui)
+            from app.core.database import delete_future_today_occurrence_if_needed
+            await delete_future_today_occurrence_if_needed(db_pool, task_def_id, new_start)
+
+        # Tenter de (re)générer l'occurrence d'aujourd'hui si la règle et la start_date le permettent
+        try:
+            from datetime import date as _date
+            today = _date.today()
+            # Génère au plus 1 occurrence pour aujourd'hui. Ne crée rien si rrule ne matche pas ou start_date > today
+            _ = await generate_occurrences_for_definition(
+                db_pool,
+                task_def_id,
+                today,
+                today,
+                max_occurrences=1,
+                dry_run=False,
+            )
+        except Exception:
+            # Soft-fail: on n'empêche pas la mise à jour si la génération échoue
+            pass
+        
         return updated_task
         
     except (UnauthorizedAccess, TaskNotFound, InvalidInput):
@@ -450,13 +476,14 @@ async def generate_task_occurrences(
         if task_def["household_id"] != household_id:
             raise TaskNotFound(task_id=str(task_def_id))
         
-        # Générer les occurrences
+        # Générer les occurrences en mode prévisualisation (dry-run)
         occurrences = await generate_occurrences_for_definition(
             db_pool,
             task_def_id,
             start_date,
             end_date,
-            max_occurrences
+            max_occurrences,
+            dry_run=True
         )
         
         return occurrences

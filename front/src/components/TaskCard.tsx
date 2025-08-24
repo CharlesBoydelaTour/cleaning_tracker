@@ -22,22 +22,24 @@ interface Task {
   dueTime: string;
   completedAt?: string;
   recurrence: string;
+  priority?: 'low' | 'medium' | 'high';
+  // Id de la définition (utilisé pour modifier la tâche)
+  definitionId?: string;
 }
 
 interface TaskCardProps {
   task: Task;
   onComplete?: (taskId: number, data?: { duration_minutes?: number; comment?: string; photo_url?: string }) => Promise<void>;
-  onSnooze?: (taskId: number, snoozedUntil: string) => Promise<void>;
-  onSkip?: (taskId: number, reason?: string) => Promise<void>;
+  onEdit?: (definitionId: string) => void;
 }
 
-const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
+const TaskCard = ({ task, onComplete, onEdit }: TaskCardProps) => {
   const getStatusIcon = () => {
     switch (task.status) {
       case "completed":
         return <CheckCircle2 className="h-5 w-5 text-green-600" />;
       case "overdue":
-        return <AlertTriangle className="h-5 w-5 text-orange-600" />;
+        return <AlertTriangle className="h-5 w-5 text-red-600" />;
       default:
         return <Clock className="h-5 w-5 text-gray-400" />;
     }
@@ -53,7 +55,7 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
         );
       case "overdue":
         return (
-          <Badge variant="destructive" className="bg-orange-100 text-orange-800 border-orange-200">
+          <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">
             En retard
           </Badge>
         );
@@ -64,6 +66,17 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
           </Badge>
         );
     }
+  };
+
+  const getPriorityBadge = () => {
+    const p = task.priority || 'medium';
+    if (p === 'high') {
+      return <Badge className="bg-red-100 text-red-800 border-red-200">Priorité : Haute</Badge>;
+    }
+    if (p === 'low') {
+      return <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">Priorité : Faible</Badge>;
+    }
+    return <Badge className="bg-amber-100 text-amber-800 border-amber-200">Priorité : Moyenne</Badge>;
   };
 
   const handleComplete = async () => {
@@ -79,21 +92,11 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
     // Implementation for rescheduling task
   };
 
-  const handleSnooze = async () => {
-    if (onSnooze) {
-      // Reporter d'1 heure par défaut
-      const snoozeUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
-      await onSnooze(task.id, snoozeUntil);
+  const handleEdit = () => {
+    if (task.definitionId && onEdit) {
+      onEdit(task.definitionId);
     } else {
-      console.log(`Snoozing task ${task.id}`);
-    }
-  };
-
-  const handleSkip = async () => {
-    if (onSkip) {
-      await onSkip(task.id, 'Tâche ignorée');
-    } else {
-      console.log(`Skipping task ${task.id}`);
+      console.log("Missing definitionId or onEdit handler");
     }
   };
 
@@ -101,7 +104,7 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
     <Card className={cn(
       "shadow-sm border-0 bg-white transition-all hover:shadow-md",
       task.status === "completed" && "opacity-75",
-      task.status === "overdue" && "border-l-4 border-l-orange-500"
+      task.status === "overdue" && "border-l-4 border-l-red-500"
     )}>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
@@ -136,21 +139,7 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
                       Marquer comme terminé
                     </DropdownMenuItem>
                   )}
-                  {task.status !== "completed" && onSnooze && (
-                    <DropdownMenuItem onClick={handleSnooze}>
-                      Reporter
-                    </DropdownMenuItem>
-                  )}
-                  {task.status !== "completed" && onSkip && (
-                    <DropdownMenuItem onClick={handleSkip}>
-                      Ignorer
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={handleReschedule}>
-                    Reprogrammer
-                  </DropdownMenuItem>
-                  <DropdownMenuItem>Réassigner</DropdownMenuItem>
-                  <DropdownMenuItem>Modifier la tâche</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleEdit}>Modifier la tâche</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -159,12 +148,15 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
             <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
               <div className="flex items-center gap-1">
                 <Calendar className="h-4 w-4" />
-                <span>{task.status === "completed" && task.completedAt ? task.completedAt : task.dueTime}</span>
+                <span>
+                  {task.status === 'completed' ? 'Terminé' : task.status === 'overdue' ? 'En retard' : 'À faire'}
+                  {task.status === 'overdue' && ' — N\'a pas été faite'}
+                </span>
               </div>
 
               <div className="flex items-center gap-1">
                 <Clock className="h-4 w-4" />
-                <span>{task.estimatedDuration} min</span>
+                <span>{task.estimatedDuration && task.estimatedDuration > 0 ? `${task.estimatedDuration} min` : '—'}</span>
               </div>
 
               <Badge variant="outline" className="border-gray-200 text-gray-600">
@@ -173,6 +165,10 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
 
               <span className="text-gray-400">•</span>
               <span>{task.assignee}</span>
+
+              {/* Priority */}
+              <span className="text-gray-400">•</span>
+              {getPriorityBadge()}
             </div>
 
             {/* Status and Actions */}
@@ -188,38 +184,13 @@ const TaskCard = ({ task, onComplete, onSnooze, onSkip }: TaskCardProps) => {
                   >
                     Terminer
                   </Button>
-                  {onSnooze && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSnooze}
-                      className="border-gray-200 hover:bg-gray-50"
-                    >
-                      Reporter
-                    </Button>
-                  )}
                 </div>
               )}
 
               {task.status === "overdue" && (
                 <div className="flex gap-2">
-                  {onSkip && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleSkip}
-                      className="border-yellow-200 text-yellow-700 hover:bg-yellow-50"
-                    >
-                      Ignorer
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleReschedule}
-                    className="border-gray-200 hover:bg-gray-50"
-                  >
-                    Reprogrammer
+                  <Button size="sm" variant="outline" onClick={handleEdit} className="border-gray-200 hover:bg-gray-50">
+                    Modifier la tâche
                   </Button>
                   <Button
                     size="sm"

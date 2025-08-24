@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from datetime import date, datetime
 from typing import Optional
 from uuid import UUID
@@ -19,38 +19,14 @@ class TaskStatus(str, Enum):
 # ============================================================================
 
 class TaskDefinitionBase(BaseModel):
-    title: str
-    description: Optional[str] = None
-    recurrence_rule: Optional[str] = None  # RRULE format (ex: "FREQ=WEEKLY;BYDAY=MO,FR")
-    estimated_minutes: Optional[int] = None
-    room_id: Optional[UUID] = None
-    is_catalog: bool = False
-
-    model_config = ConfigDict(strict=False)
-
-    @field_validator("title")
-    @classmethod
-    def validate_title(cls, v: str) -> str:
-        """Valider que le titre n'est pas vide"""
-        if not v or v.strip() == "":
-            raise ValueError("Le titre ne peut pas être vide")
-        return v.strip()
-
-    @field_validator("recurrence_rule")
-    @classmethod
-    def validate_recurrence_rule(cls, v: Optional[str]) -> Optional[str]:
-        """Valider le format basique de la règle de récurrence"""
-        if v is None or (isinstance(v, str) and v.strip() == ""):
-            return None  # Sera validé dans le routeur pour retourner HTTP 400
-        return v.strip() if v else v
-
-    @field_validator("estimated_minutes")
-    @classmethod
-    def validate_estimated_minutes(cls, v: Optional[int]) -> Optional[int]:
-        """Valider que la durée estimée est positive"""
-        if v is not None and v <= 0:
-            raise ValueError("La durée estimée doit être positive")
-        return v
+    title: str = Field(..., min_length=1, max_length=255, description="Titre de la tâche")
+    description: Optional[str] = Field(None, max_length=1000, description="Description de la tâche")
+    room_id: UUID = Field(..., description="ID de la pièce")
+    assigned_member_id: Optional[UUID] = Field(None, description="ID du membre assigné")
+    recurrence_rule: str = Field(..., description="Règle de récurrence")
+    start_date: Optional[datetime] = Field(None, description="Date de début")
+    estimated_minutes: Optional[int] = Field(None, ge=0, description="Temps estimé en minutes")
+    is_catalog: bool = Field(False, description="Indique si c'est une tâche du catalogue")
 
 
 class TaskDefinitionCreate(TaskDefinitionBase):
@@ -75,6 +51,7 @@ class TaskDefinitionUpdate(BaseModel):
     recurrence_rule: Optional[str] = None
     estimated_minutes: Optional[int] = None
     room_id: Optional[UUID] = None
+    start_date: Optional[date] = None
 
     model_config = ConfigDict(strict=False)
 
@@ -128,12 +105,13 @@ class TaskOccurrenceBase(BaseModel):
     @field_validator("snoozed_until")
     @classmethod
     def validate_snoozed_until(cls, v: Optional[datetime], values) -> Optional[datetime]:
-        """Valider que snoozed_until est cohérent avec le statut"""
-        status = values.data.get("status", TaskStatus.PENDING)
-        if v is not None and status != TaskStatus.SNOOZED:
-            raise ValueError("snoozed_until ne peut être défini que si le statut est 'snoozed'")
-        if status == TaskStatus.SNOOZED and v is None:
-            raise ValueError("snoozed_until doit être défini si le statut est 'snoozed'")
+        """Validation souple pour les réponses.
+
+        Historique: des occurrences peuvent conserver un snoozed_until non nul même si le statut
+        n'est plus "snoozed" (ex: après complétion). Cette validation stricte provoquait des
+        ResponseValidationError côté FastAPI. On conserve la contrainte stricte sur les payloads
+        d'entrée (voir TaskOccurrenceUpdate), mais on n'empêche pas la sérialisation ici.
+        """
         return v
 
 

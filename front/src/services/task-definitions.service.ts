@@ -33,7 +33,7 @@ export const taskDefinitionsService = {
       max_occurrences: 1,
     } as const;
 
-    const response = await apiClient.post(
+  const response = await apiClient.post(
       `/households/${householdId}/task-definitions/${taskDefId}/generate-occurrences`,
       {},
       { params }
@@ -43,6 +43,10 @@ export const taskDefinitionsService = {
       return list[0]?.scheduled_date ?? null;
     }
     return null;
+  },
+
+  async delete(householdId: string, taskDefId: string): Promise<void> {
+    await apiClient.delete(`/households/${householdId}/task-definitions/${taskDefId}`);
   },
 };
 

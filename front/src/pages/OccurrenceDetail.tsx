@@ -52,27 +52,10 @@ const OccurrenceDetail = () => {
     }
   };
 
-  const handleReschedule = () => {
-    // TODO: Implement reschedule logic
+  const handleEdit = () => {
     toast({
-      title: "Reschedule",
-      description: "Reschedule functionality will be implemented here.",
-    });
-  };
-
-  const handleSkip = () => {
-    // TODO: Implement skip logic
-    toast({
-      title: "Task skipped",
-      description: "This occurrence has been skipped.",
-    });
-  };
-
-  const handleReassign = () => {
-    // TODO: Implement reassign logic
-    toast({
-      title: "Reassign",
-      description: "Reassign functionality will be implemented here.",
+      title: "Modifier la tâche",
+      description: "Depuis cet écran vous pourrez reprogrammer ou réassigner.",
     });
   };
 
@@ -249,29 +232,12 @@ const OccurrenceDetail = () => {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button
-                  onClick={handleReschedule}
+                  onClick={handleEdit}
                   variant="outline"
                   className="w-full border-gray-200 hover:bg-gray-50"
                 >
                   <Calendar className="h-4 w-4 mr-2" />
-                  Reschedule
-                </Button>
-
-                <Button
-                  onClick={handleReassign}
-                  variant="outline"
-                  className="w-full border-gray-200 hover:bg-gray-50"
-                >
-                  <User className="h-4 w-4 mr-2" />
-                  Reassign
-                </Button>
-
-                <Button
-                  onClick={handleSkip}
-                  variant="outline"
-                  className="w-full border-orange-200 text-orange-600 hover:bg-orange-50"
-                >
-                  Skip This Time
+                  Modifier la tâche
                 </Button>
               </CardContent>
             </Card>

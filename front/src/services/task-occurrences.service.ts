@@ -130,6 +130,16 @@ export const taskOccurrencesService = {
   },
 
   /**
+   * Remettre une occurrence effectuée à refaire aujourd'hui
+   */
+  async reopen(occurrenceId: string): Promise<TaskOccurrence> {
+    const response = await apiClient.put<TaskOccurrence>(
+      `/occurrences/${occurrenceId}/reopen`
+    );
+    return response.data;
+  },
+
+  /**
    * Générer les occurrences pour un ménage
    */
   async generateForHousehold(

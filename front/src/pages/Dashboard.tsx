@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import TaskCard from "@/components/TaskCard";
 import AppLayout from "@/components/AppLayout";
@@ -18,10 +19,11 @@ import CreateHouseholdModal from '@/components/CreateHouseholdModal';
 import { taskService } from '@/services/api';
 import { taskDefinitionsService, type TaskDefinitionListItem } from '@/services/task-definitions.service';
 import { useToast } from '@/hooks/use-toast';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { toast } = useToast();
     const { user, loading: authLoading } = useAuth();
     const {
@@ -51,6 +53,7 @@ const Dashboard = () => {
     const [sortKey, setSortKey] = useState<"title" | "room_name" | "estimated_minutes" | "created_at" | "next_occurrence">("created_at");
     const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
     const [nextDates, setNextDates] = useState<Record<string, string | null>>({});
+    const [onlyTodoToday, setOnlyTodoToday] = useState(false);
 
     const fetchDefinitions = async () => {
         if (!householdId) return;
@@ -85,8 +88,8 @@ const Dashboard = () => {
 
     useEffect(() => {
         if (householdId) fetchDefinitions();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [householdId]);
+        // Recharger aussi quand on revient/renavigue sur le dashboard
+    }, [householdId, location.key]);
 
     const sortedFilteredDefs = useMemo(() => {
         const q = defsSearch.trim().toLowerCase();
@@ -114,23 +117,32 @@ const Dashboard = () => {
     }, [defs, defsSearch, sortKey, sortDir, nextDates]);
 
     // Helper: convert occurrence to TaskCard props
-    const convertTaskForCard = (task: any) => ({
-        id: task.id,
-        title: task.definition_title || task.task_title || 'Tâche sans titre',
-        description: task.definition_description || task.task_description || '',
-        room: task.room_name || 'Aucune pièce',
-        assignee: task.assigned_user_name || task.assigned_user_email || 'Non assigné',
-        estimatedDuration: task.estimated_minutes || 0,
-        status: task.status === 'done' ? 'completed' as const :
-            task.status === 'overdue' ? 'overdue' as const :
-                'todo' as const,
-        dueTime: task.due_at ? new Date(task.due_at).toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit'
-        }) : '',
-        completedAt: task.status === 'done' ? 'Terminé' : undefined,
-        recurrence: 'Récurrent'
-    });
+    const convertTaskForCard = (task: any) => {
+        // Normaliser la durée estimée à partir de plusieurs sources possibles
+        const minutesRaw = task.estimated_minutes ?? task.definition_estimated_minutes ?? task.task_estimated_minutes ?? task.estimatedDuration;
+        const minutes = typeof minutesRaw === 'string' ? parseInt(minutesRaw, 10) : minutesRaw;
+        const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : (Number.isFinite(minutes) ? minutes : 0);
+        return ({
+            id: task.id,
+            title: task.definition_title || task.task_title || 'Tâche sans titre',
+            description: task.definition_description || task.task_description || '',
+            room: task.room_name || 'Aucune pièce',
+            assignee: task.assigned_user_name || task.assigned_user_email || 'Non assigné',
+            // Durée estimée (min)
+            estimatedDuration: safeMinutes,
+            status: task.status === 'done' ? 'completed' as const :
+                task.status === 'overdue' ? 'overdue' as const :
+                    'todo' as const,
+            dueTime: task.due_at ? new Date(task.due_at).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit'
+            }) : '',
+            completedAt: task.status === 'done' ? 'Terminé' : undefined,
+            recurrence: 'Récurrent',
+            priority: (task.priority || task.definition_priority || 'medium') as 'low' | 'medium' | 'high',
+            definitionId: task.task_id || task.definition_id || task.definitionId
+        });
+    }
 
     const {
         tasks: todayTasks,
@@ -143,6 +155,31 @@ const Dashboard = () => {
         skipTask,
         refetch: refetchTasks
     } = tasksHookResult;
+
+    // Rafraîchir les tâches du jour au retour/renavigation
+    useEffect(() => {
+        if (householdId) refetchTasks();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [householdId, location.key]);
+
+    // Pré-calculs dépendants des tâches (doivent rester avant tout retour conditionnel pour conserver l'ordre des hooks)
+    const completedTasks = tasksByStatus?.completed || [];
+    const todoTasks = tasksByStatus?.todo || [];
+    // Map des définitions pour lesquelles il existe une occurrence à faire aujourd'hui (pending/snoozed)
+    const todoTodayMap = useMemo(() => {
+        const m: Record<string, boolean> = {};
+        // Inclure aussi les en retard comme "à faire aujourd'hui"
+        const actionable = [
+            ...(tasksByStatus?.todo || []),
+            ...(tasksByStatus?.overdue || [])
+        ];
+        for (const occ of actionable) {
+            if (occ.task_id) m[occ.task_id] = true;
+        }
+        return m;
+    }, [todoTasks, tasksByStatus?.overdue]);
+    const overdueTasks = tasksByStatus?.overdue || [];
+    const completionRate = todayStats ? todayStats.completionRate : 0;
 
     const handleCreateTask = async (taskData: any) => {
         if (!householdId) {
@@ -248,10 +285,7 @@ const Dashboard = () => {
         );
     }
 
-    const completedTasks = tasksByStatus?.completed || [];
-    const overdueTasks = tasksByStatus?.overdue || [];
-    const todoTasks = tasksByStatus?.todo || [];
-    const completionRate = todayStats ? todayStats.completionRate : 0;
+
 
     return (
         <AppLayout activeHousehold={householdName || "Foyer"}>
@@ -328,9 +362,9 @@ const Dashboard = () => {
                 {overdueTasks.length > 0 && (
                     <div className="mb-6" ref={overdueRef}>
                         <div className="flex items-center gap-2 mb-4">
-                            <AlertTriangle className="h-5 w-5 text-orange-600" />
-                            <h2 className="text-lg font-semibold text-gray-900">Tâches en retard</h2>
-                            <Badge variant="destructive" className="bg-orange-100 text-orange-800 border-orange-200">{overdueTasks.length}</Badge>
+                            <AlertTriangle className="h-5 w-5 text-red-600" />
+                            <h2 className="text-lg font-semibold text-red-700">Tâches en retard</h2>
+                            <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">{overdueTasks.length}</Badge>
                         </div>
                         <div className="space-y-3">
                             {overdueTasks.map(task => (
@@ -338,8 +372,7 @@ const Dashboard = () => {
                                     key={task.id}
                                     task={convertTaskForCard(task)}
                                     onComplete={() => completeTask(task.id, {})}
-                                    onSnooze={() => snoozeTask(task.id, new Date(Date.now() + 60 * 60 * 1000).toISOString())}
-                                    onSkip={() => skipTask(task.id, "Tâche ignorée depuis la page d'accueil")}
+                                    onEdit={(definitionId: string) => navigate(`/tasks/${definitionId}/edit?occurrenceId=${task.id}`)}
                                 />
                             ))}
                         </div>
@@ -359,8 +392,7 @@ const Dashboard = () => {
                                     key={task.id}
                                     task={convertTaskForCard(task)}
                                     onComplete={() => completeTask(task.id, {})}
-                                    onSnooze={() => snoozeTask(task.id, new Date(Date.now() + 60 * 60 * 1000).toISOString())}
-                                    onSkip={() => skipTask(task.id, "Tâche ignorée depuis la page d'accueil")}
+                                    onEdit={(definitionId: string) => navigate(`/tasks/${definitionId}/edit?occurrenceId=${task.id}`)}
                                 />
                             ))}
                         </div>
@@ -383,7 +415,7 @@ const Dashboard = () => {
                         </div>
                         <div className="space-y-3">
                             {completedTasks.map(task => (
-                                <TaskCard key={task.id} task={convertTaskForCard(task)} />
+                                <TaskCard key={task.id} task={convertTaskForCard(task)} onEdit={(definitionId: string) => navigate(`/tasks/${definitionId}/edit?occurrenceId=${task.id}`)} />
                             ))}
                         </div>
                     </div>
@@ -409,8 +441,17 @@ const Dashboard = () => {
                             <CardTitle className="text-lg font-semibold text-gray-900">Toutes les tâches</CardTitle>
                             <Badge variant="secondary" className="bg-gray-50 text-gray-700 border-gray-200">{defs.length}</Badge>
                         </div>
-                        <div className="mt-3">
-                            <Input placeholder="Rechercher par titre, pièce..." value={defsSearch} onChange={(e) => setDefsSearch(e.target.value)} />
+                        <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <Input
+                                placeholder="Rechercher par titre, pièce..."
+                                value={defsSearch}
+                                onChange={(e) => setDefsSearch(e.target.value)}
+                                className="md:max-w-md"
+                            />
+                            <label className="flex items-center gap-2 text-sm text-gray-700">
+                                <Switch checked={onlyTodoToday} onCheckedChange={(v) => setOnlyTodoToday(Boolean(v))} />
+                                Afficher seulement à faire aujourd'hui
+                            </label>
                         </div>
                     </CardHeader>
                     <CardContent>
@@ -432,17 +473,20 @@ const Dashboard = () => {
                                         <TableHead className="cursor-pointer" onClick={() => { setSortKey('title'); setSortDir(sortKey === 'title' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Titre {sortKey === 'title' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
                                         <TableHead className="cursor-pointer" onClick={() => { setSortKey('room_name'); setSortDir(sortKey === 'room_name' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Pièce {sortKey === 'room_name' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
                                         <TableHead className="cursor-pointer" onClick={() => { setSortKey('estimated_minutes'); setSortDir(sortKey === 'estimated_minutes' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Durée estimée {sortKey === 'estimated_minutes' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
-                                        <TableHead>Statut</TableHead>
+                                        <TableHead>À faire aujourd'hui ?</TableHead>
+                                        <TableHead>Récurrence</TableHead>
                                         <TableHead className="cursor-pointer" onClick={() => { setSortKey('next_occurrence'); setSortDir(sortKey === 'next_occurrence' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Prochaine Occurence {sortKey === 'next_occurrence' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
                                         <TableHead className="cursor-pointer" onClick={() => { setSortKey('created_at'); setSortDir(sortKey === 'created_at' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Créée le {sortKey === 'created_at' ? (sortDir === 'asc' ? '▲' : '▼') : ''}</TableHead>
+                                        <TableHead>Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {sortedFilteredDefs.map((d) => (
+                                    {(onlyTodoToday ? sortedFilteredDefs.filter((d) => todoTodayMap[d.id]) : sortedFilteredDefs).map((d) => (
                                         <TableRow key={d.id}>
                                             <TableCell className="font-medium">{d.title}</TableCell>
                                             <TableCell>{d.room_name ?? '—'}</TableCell>
                                             <TableCell>{typeof d.estimated_minutes === 'number' ? `${d.estimated_minutes} min` : '—'}</TableCell>
+                                            <TableCell>{todoTodayMap[d.id] ? 'Oui' : 'Non'}</TableCell>
                                             <TableCell>
                                                 <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-gray-200">
                                                     {d.recurrence_rule?.toUpperCase().includes('COUNT=1') ? 'Unique' : 'Récurrente'}
@@ -450,6 +494,13 @@ const Dashboard = () => {
                                             </TableCell>
                                             <TableCell>{nextDates[d.id] ? new Date(nextDates[d.id] as string).toLocaleDateString('fr-FR') : '—'}</TableCell>
                                             <TableCell>{new Date(d.created_at).toLocaleDateString('fr-FR')}</TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    <Button variant="outline" size="sm" className="border-gray-200" onClick={() => navigate(`/tasks/${d.id}/edit`)}>
+                                                        Modifier
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>

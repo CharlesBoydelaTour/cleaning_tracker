@@ -332,10 +332,10 @@ async def update_task_definition(
         update_fields = []
         params = [task_def_id]
         param_count = 1
-        
-        allowed_fields = ['title', 'description', 'recurrence_rule', 
-                         'estimated_minutes', 'room_id']
-        
+
+        allowed_fields = ['title', 'description', 'recurrence_rule',
+                          'estimated_minutes', 'room_id', 'start_date']
+
         for field, value in kwargs.items():
             if field in allowed_fields and value is not None:
                 param_count += 1
@@ -379,6 +379,29 @@ async def delete_task_definition(
             task_def_id
         )
         return "DELETE 1" in result
+
+
+async def delete_future_today_occurrence_if_needed(
+    pool: asyncpg.Pool,
+    task_def_id: UUID,
+    new_start_date: date
+) -> None:
+    """
+    Si on décale la start_date dans le futur, supprimer l'occurrence d'aujourd'hui
+    (et celles antérieures) qui ne devraient plus exister si elles ne sont pas DONE/SKIPPED.
+    """
+    ensure_pool(pool)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            DELETE FROM task_occurrences
+            WHERE task_id = $1
+              AND scheduled_date < $2
+              AND status IN ('pending','snoozed','overdue')
+            """,
+            task_def_id,
+            new_start_date,
+        )
 
 
 # ============================================================================
@@ -619,7 +642,7 @@ async def complete_task_occurrence(
             await conn.execute(
                 """
                 UPDATE task_occurrences
-                SET status = $1
+                SET status = $1, snoozed_until = NULL
                 WHERE id = $2
                 """,
                 TaskStatus.DONE.value, occurrence_id
@@ -649,7 +672,8 @@ async def generate_occurrences_for_definition(
     task_def_id: UUID,
     start_date: date,
     end_date: date,
-    max_occurrences: int = 100
+    max_occurrences: int = 100,
+    dry_run: bool = False,
 ) -> List[Dict[str, Any]]:
     """
     Générer les occurrences pour une définition de tâche sur une période.
@@ -673,21 +697,99 @@ async def generate_occurrences_for_definition(
         
         if not task_def:
             return []
+        # Convertir en dict pour utiliser .get sans erreur
+        task_def = dict(task_def)
         
         # Parser la règle de récurrence
         try:
             # Convertir les dates en datetime pour rrule
-            start_datetime = datetime.combine(start_date, datetime.min.time())
+            # Ancrer la RRULE sur la start_date de la tâche si définie (semantique d'ancrage),
+            # mais générer sur la plage effective [max(start_date, task_start_date), end_date]
+            task_start_date = task_def.get('start_date')
+
+            # Ancrage (dtstart) pour la RRULE
+            anchor_date = task_start_date if (task_start_date and isinstance(task_start_date, date)) else start_date
+            dtstart_anchor = datetime.combine(anchor_date, datetime.min.time())
+
+            # Plage effective de génération
+            if task_start_date and isinstance(task_start_date, date):
+                range_start_date = max(start_date, task_start_date)
+            else:
+                range_start_date = start_date
+
+            range_start_dt = datetime.combine(range_start_date, datetime.min.time())
             end_datetime = datetime.combine(end_date, datetime.max.time())
-            rrule = rrulestr(task_def['recurrence_rule'], dtstart=start_datetime)
+
+            rrule = rrulestr(task_def['recurrence_rule'], dtstart=dtstart_anchor)
         except Exception:
             # Si la règle est invalide, ne pas générer d'occurrences
             return []
         
         created_occurrences = []
-        
-        # Générer les dates selon la règle
-        for occurrence_date in rrule.between(start_datetime, end_datetime, inc=True):
+
+        # Cas particulier: si on cherche au plus une occurrence sur une petite fenêtre (ex: aujourd'hui),
+        # utiliser rrule.after avec inc=True pour inclure l'événement à dtstart lorsque pertinent.
+    from datetime import timedelta as _td
+    is_single_day_window = (end_datetime - range_start_dt) <= _td(days=1)
+    if max_occurrences == 1 and is_single_day_window:
+            # 1) Essayer l'occurrence d'aujourd'hui (>= range_start_dt)
+            candidate = rrule.after(range_start_dt - _td(seconds=1), inc=True)
+            if candidate and candidate <= end_datetime:
+                scheduled_date = candidate.date()
+                due_at = datetime.combine(scheduled_date, datetime.max.time())
+                if dry_run:
+                    import uuid
+                    occurrence = {
+                        'id': uuid.uuid4(),
+                        'task_id': task_def_id,
+                        'scheduled_date': scheduled_date,
+                        'due_at': due_at,
+                        'status': TaskStatus.PENDING.value,
+                        'assigned_to': None,
+                        'snoozed_until': None,
+                        'created_at': datetime.utcnow(),
+                    }
+                else:
+                    occurrence = await create_task_occurrence(pool, task_def_id, scheduled_date, due_at)
+                if occurrence:
+                    created_occurrences.append(occurrence)
+                return created_occurrences
+
+            # 2) Sinon, backfill: créer au plus UNE occurrence passée (<= today) pour la considérer en retard
+            prev = rrule.before(end_datetime + _td(seconds=1), inc=True)
+            if prev and prev <= end_datetime:
+                # Respecter la start_date de la tâche: backfill seulement si la start_date <= prev.date()
+                task_start_date = task_def.get('start_date')
+                if task_start_date and isinstance(task_start_date, date) and task_start_date > prev.date():
+                    return created_occurrences
+                scheduled_date = prev.date()
+                due_at = datetime.combine(scheduled_date, datetime.max.time())
+                if dry_run:
+                    import uuid
+                    occurrence = {
+                        'id': uuid.uuid4(),
+                        'task_id': task_def_id,
+                        'scheduled_date': scheduled_date,
+                        'due_at': due_at,
+                        'status': TaskStatus.PENDING.value,
+                        'assigned_to': None,
+                        'snoozed_until': None,
+                        'created_at': datetime.utcnow(),
+                    }
+                else:
+                    occurrence = await create_task_occurrence(pool, task_def_id, scheduled_date, due_at)
+                    # Mise à jour immédiate en OVERDUE si la date est passée
+                    try:
+                        if scheduled_date < date.today() and occurrence and occurrence.get('status') == TaskStatus.PENDING.value:
+                            await update_task_occurrence_status(pool, occurrence['id'], TaskStatus.OVERDUE)
+                    except Exception:
+                        pass
+                if occurrence:
+                    created_occurrences.append(occurrence)
+            return created_occurrences
+
+    # Générer les dates selon la règle (fenêtre multi-jours)
+    for occurrence_date in rrule.between(range_start_dt, end_datetime, inc=True):
             if len(created_occurrences) >= max_occurrences:
                 break
             
@@ -696,15 +798,29 @@ async def generate_occurrences_for_definition(
             # Calculer l'heure d'échéance (par défaut à 23:59)
             due_at = datetime.combine(scheduled_date, datetime.max.time())
             
-            # Créer l'occurrence
-            occurrence = await create_task_occurrence(
-                pool, task_def_id, scheduled_date, due_at
-            )
+            if dry_run:
+                # Occurrence virtuelle (non persistée)
+                import uuid
+                occurrence = {
+                    'id': uuid.uuid4(),
+                    'task_id': task_def_id,
+                    'scheduled_date': scheduled_date,
+                    'due_at': due_at,
+                    'status': TaskStatus.PENDING.value,
+                    'assigned_to': None,
+                    'snoozed_until': None,
+                    'created_at': datetime.utcnow(),
+                }
+            else:
+                # Créer l'occurrence persistée
+                occurrence = await create_task_occurrence(
+                    pool, task_def_id, scheduled_date, due_at
+                )
             
             if occurrence:
                 created_occurrences.append(occurrence)
         
-        return created_occurrences
+    return created_occurrences
 
 
 async def generate_occurrences_for_household(

@@ -69,8 +69,20 @@ async def list_household_occurrences(
             start_date = date.today()
             from datetime import timedelta
             end_date = start_date + timedelta(days=30)
-        
-        # Récupérer les occurrences
+        # Si la fenêtre couvre aujourd'hui, recalculer les retards avant de lister
+        today = date.today()
+        window_start = start_date or today
+        window_end = end_date or today
+        if window_start <= today <= window_end:
+            try:
+                await check_and_update_overdue_occurrences(db_pool, household_id=household_id)
+            except Exception as e:
+                logger.warning(
+                    "Échec check_overdue (continuation)",
+                    extra=with_context(household_id=str(household_id), error=str(e))
+                )
+
+        # Récupérer les occurrences de la fenêtre demandée
         occurrences = await get_task_occurrences(
             db_pool,
             household_id=household_id,
@@ -80,6 +92,22 @@ async def list_household_occurrences(
             assigned_to=assigned_to,
             room_id=room_id
         )
+
+        # Si la fenêtre couvre aujourd'hui et aucun filtre de statut n'est imposé,
+        # ajouter aussi les occurrences OVERDUE antérieures à aujourd'hui
+        if window_start <= today <= window_end and status is None:
+            from datetime import timedelta as _td
+            overdue_until_yesterday = await get_task_occurrences(
+                db_pool,
+                household_id=household_id,
+                start_date=None,
+                end_date=today - _td(days=1),
+                status=TaskStatus.OVERDUE,
+                assigned_to=assigned_to,
+                room_id=room_id
+            )
+            # Concaténer; pas de doublons attendus car fenêtres disjointes
+            occurrences.extend(overdue_until_yesterday)
         
         # Transformer en TaskOccurrenceWithDefinition
         enriched_occurrences = []
@@ -333,15 +361,15 @@ async def skip_occurrence(
                 details=f"Cette occurrence est déjà {occurrence['status']}"
             )
         
-        # Mettre à jour le statut
+        # Mettre à jour le statut: une tâche ignorée devient "en retard"
         updated_occurrence = await update_task_occurrence_status(
             db_pool,
             occurrence_id,
-            TaskStatus.SKIPPED
+            TaskStatus.OVERDUE
         )
         
         logger.info(
-            "Occurrence ignorée",
+            "Occurrence marquée en retard (ignore)",
             extra=with_context(
                 occurrence_id=str(occurrence_id),
                 skipped_by=current_user["id"],
@@ -434,6 +462,48 @@ async def assign_occurrence(
             details=str(e)
         )
 
+
+@router.put("/occurrences/{occurrence_id}/reopen", response_model=TaskOccurrence)
+async def reopen_occurrence(
+    occurrence_id: UUID,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Remettre une occurrence effectuée à refaire aujourd'hui (repasser en pending).
+    """
+    try:
+        occurrence = await get_task_occurrence(db_pool, occurrence_id)
+        if not occurrence:
+            raise OccurrenceNotFound(occurrence_id=str(occurrence_id))
+
+        household_id = occurrence["household_id"]
+        has_access = await check_household_access(db_pool, household_id, current_user["id"])
+        if not has_access:
+            raise UnauthorizedAccess(resource="occurrence", action="reopen")
+
+        if occurrence["status"] != TaskStatus.DONE.value:
+            raise BusinessRuleViolation(
+                rule="NOT_COMPLETED",
+                details="Seules les occurrences terminées peuvent être remises à faire"
+            )
+
+        updated_occurrence = await update_task_occurrence_status(db_pool, occurrence_id, TaskStatus.PENDING)
+
+        logger.info(
+            "Occurrence rouverte (à refaire)",
+            extra=with_context(
+                occurrence_id=str(occurrence_id),
+                reopened_by=current_user["id"]
+            )
+        )
+
+        return updated_occurrence
+
+    except (UnauthorizedAccess, OccurrenceNotFound, BusinessRuleViolation):
+        raise
+    except Exception as e:
+        raise DatabaseError(operation="réouverture de l'occurrence", details=str(e))
 
 @household_router.post("/{household_id}/occurrences/generate")
 async def generate_household_occurrences(

@@ -29,6 +29,7 @@ interface TaskFormData {
   assigned_to: string;
   recurrence_type: 'once' | 'daily' | 'weekly' | 'monthly';
   recurrence_days: string[];
+  recurrence_month_days: number[];
   start_date: string;
   priority: 'low' | 'medium' | 'high';
 }
@@ -67,6 +68,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
     assigned_to: 'auto',
     recurrence_type: 'weekly',
     recurrence_days: [],
+    recurrence_month_days: [],
     start_date: new Date().toISOString().split('T')[0],
     priority: 'medium'
   });
@@ -98,6 +100,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
         assigned_to: 'auto',
         recurrence_type: 'weekly',
         recurrence_days: [],
+        recurrence_month_days: [],
         start_date: new Date().toISOString().split('T')[0],
         priority: 'medium'
       });
@@ -182,6 +185,15 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
     }));
   };
 
+  const handleMonthDayToggle = (day: number) => {
+    setFormData(prev => ({
+      ...prev,
+      recurrence_month_days: prev.recurrence_month_days.includes(day)
+        ? prev.recurrence_month_days.filter(d => d !== day)
+        : [...prev.recurrence_month_days, day].sort((a, b) => a - b)
+    }));
+  };
+
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -196,6 +208,9 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
       case 3: // Récurrence
         if (formData.recurrence_type === 'weekly' && formData.recurrence_days.length === 0) {
           newErrors.recurrence_days = 'Sélectionnez au moins un jour';
+        }
+        if (formData.recurrence_type === 'monthly' && formData.recurrence_month_days.length === 0) {
+          newErrors.recurrence_month_days = 'Sélectionnez au moins un jour du mois';
         }
         break;
     }
@@ -242,7 +257,7 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
           rrule = `FREQ=WEEKLY;BYDAY=${formData.recurrence_days.join(',')}`;
           break;
         case 'monthly':
-          rrule = 'FREQ=MONTHLY';
+          rrule = `FREQ=MONTHLY;BYMONTHDAY=${formData.recurrence_month_days.join(',')}`;
           break;
         case 'once':
           // Le backend exige une RRULE non vide. Encode une tâche unique via COUNT=1
@@ -288,7 +303,10 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const generateRecurrencePreview = () => {
     if (formData.recurrence_type === 'once') return 'Tâche unique';
     if (formData.recurrence_type === 'daily') return 'Tous les jours';
-    if (formData.recurrence_type === 'monthly') return 'Tous les mois';
+    if (formData.recurrence_type === 'monthly') {
+      const md = formData.recurrence_month_days;
+      return md.length ? `Chaque mois aux jours ${md.join(', ')}` : 'Mensuel';
+    }
     if (formData.recurrence_type === 'weekly' && formData.recurrence_days.length > 0) {
       const dayLabels = formData.recurrence_days.map(day =>
         DAYS_OF_WEEK.find(d => d.value === day)?.label
@@ -571,6 +589,27 @@ export const NewTaskModal: React.FC<NewTaskModalProps> = ({
                     ))}
                   </div>
                   {errors.recurrence_days && <p className="text-sm text-red-600 mt-1">{errors.recurrence_days}</p>}
+                </div>
+              )}
+
+              {formData.recurrence_type === 'monthly' && (
+                <div>
+                  <Label>Jours du mois</Label>
+                  <div className="grid grid-cols-7 gap-2 mt-2">
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                      <Button
+                        key={day}
+                        variant={formData.recurrence_month_days.includes(day) ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleMonthDayToggle(day)}
+                        type="button"
+                        className="px-2"
+                      >
+                        {day}
+                      </Button>
+                    ))}
+                  </div>
+                  {errors.recurrence_month_days && <p className="text-sm text-red-600 mt-1">{errors.recurrence_month_days}</p>}
                 </div>
               )}
 
