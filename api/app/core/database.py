@@ -1274,3 +1274,55 @@ async def delete_room(
             household_id,
         )
         return "DELETE 1" in result
+
+
+async def update_room(
+    pool: asyncpg.Pool,
+    household_id: UUID,
+    room_id: UUID,
+    *,
+    name: Optional[str] = None,
+    icon: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Mettre à jour une pièce d'un ménage et retourner la pièce mise à jour.
+
+    Retourne None si la pièce n'existe pas dans ce ménage.
+    """
+    ensure_pool(pool)
+    # Rien à mettre à jour
+    if name is None and icon is None:
+        # Retourner l'état actuel si existant
+        existing = await get_room(pool, room_id)
+        if not existing or existing.get("household_id") != household_id:
+            return None
+        return existing
+
+    async with pool.acquire() as conn:
+        # Vérifier l'existence et l'appartenance
+        exists = await conn.fetchval(
+            """
+            SELECT 1 FROM rooms WHERE id = $1 AND household_id = $2
+            """,
+            room_id,
+            household_id,
+        )
+        if not exists:
+            return None
+
+        update_fields = []
+        params = []
+        if name is not None:
+            update_fields.append("name = $" + str(len(params) + 1))
+            params.append(name)
+        if icon is not None:
+            update_fields.append("icon = $" + str(len(params) + 1))
+            params.append(icon)
+
+        query = f"""
+            UPDATE rooms
+            SET {', '.join(update_fields)}
+            WHERE id = ${len(params) + 1} AND household_id = ${len(params) + 2}
+            RETURNING id, name, household_id, icon, created_at
+        """
+        row = await conn.fetchrow(query, *params, room_id, household_id)
+        return dict(row) if row else None

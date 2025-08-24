@@ -1,5 +1,5 @@
 
-import { Home, Calendar, BarChart3, User, Settings, Plus, LayoutDashboard } from "lucide-react";
+import { Home, Calendar, User, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -11,7 +11,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarSeparator,
   SidebarHeader,
 } from "@/components/ui/sidebar";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -24,9 +23,7 @@ const Navigation = () => {
     { icon: Home, label: "Home", path: "/home", active: location.pathname === "/home" },
     { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard", active: location.pathname === "/dashboard" },
     { icon: Calendar, label: "Calendar", path: "/calendar", active: location.pathname === "/calendar" },
-    { icon: BarChart3, label: "Stats", path: "/stats", active: location.pathname === "/stats" },
     { icon: User, label: "Profile", path: "/profile", active: location.pathname === "/profile" },
-    { icon: Settings, label: "Settings", path: "/settings", active: location.pathname === "/settings" },
   ];
 
   return (
@@ -95,27 +92,7 @@ const Navigation = () => {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          <SidebarSeparator />
-
-          <SidebarGroup>
-            <SidebarGroupLabel>Quick Actions</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton tooltip="Create Task">
-                    <Plus className="h-4 w-4" />
-                    <span>Create Task</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton tooltip="Add Room">
-                    <Plus className="h-4 w-4" />
-                    <span>Add Room</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {/* Quick Actions retiré pour MVP */}
         </SidebarContent>
       </Sidebar>
     </>

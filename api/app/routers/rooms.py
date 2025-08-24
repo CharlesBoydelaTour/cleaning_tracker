@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.schemas.room import RoomCreate, Room
+from app.schemas.room import RoomCreate, Room, RoomUpdate
 from app.core.database import (
     get_rooms,
     get_room,
     create_room,
     delete_room,
+    update_room,
 )
 import asyncpg
 from app.routers.households import get_db_pool, check_household_access
@@ -168,4 +169,45 @@ async def remove_room(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erreur lors de la suppression de la pièce: {str(e)}",
+        )
+
+
+@router.put("/{household_id}/rooms/{room_id}", response_model=Room)
+async def edit_room(
+    household_id: UUID,
+    room_id: UUID,
+    payload: RoomUpdate,
+    db_pool: asyncpg.Pool = Depends(get_db_pool),
+    user_id: str = None,
+):
+    """
+    Met à jour le nom et/ou l'icône d'une pièce.
+    """
+    try:
+        # Vérifier l'accès si user_id fourni
+        if user_id:
+            has_access = await check_household_access(db_pool, household_id, user_id)
+            if not has_access:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Vous n'avez pas accès à ce ménage",
+                )
+
+        updated = await update_room(
+            db_pool,
+            household_id,
+            room_id,
+            name=payload.name,
+            icon=payload.icon,
+        )
+        if not updated:
+            # Soit inexistante, soit n'appartient pas au ménage
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pièce introuvable dans ce ménage")
+        return updated
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erreur lors de la mise à jour de la pièce: {str(e)}",
         )

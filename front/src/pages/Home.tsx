@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Home as HomeIcon, Settings, Pencil, Trash2, Users } from "lucide-react";
+import { Plus, Home as HomeIcon, Pencil, Trash2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,7 @@ import { roomsService } from '@/services/rooms.service';
 import { membersService } from '@/services/members.service';
 import { Room, HouseholdMember } from '@/types/household.types';
 import CreateRoomModal from '@/components/CreateRoomModal';
+import EditRoomModal from '@/components/EditRoomModal';
 import InviteMemberModal from '@/components/InviteMemberModal';
 import MemberCard from '@/components/MemberCard';
 import WelcomeScreen from '@/components/WelcomeScreen';
@@ -34,6 +35,7 @@ const Home = () => {
     const [showCreateHouseholdModal, setShowCreateHouseholdModal] = useState(false);
     const [showInviteMemberModal, setShowInviteMemberModal] = useState(false);
     const [activeTab, setActiveTab] = useState('rooms');
+    const [editRoomModal, setEditRoomModal] = useState<{ open: boolean; room?: Room }>(() => ({ open: false }));
 
     const queryClient = useQueryClient();
 
@@ -93,6 +95,20 @@ const Home = () => {
             } else {
                 alert('Erreur lors de la suppression de la pièce');
             }
+        }
+    });
+
+    // Mutation pour renommer une pièce
+    const updateRoomMutation = useMutation({
+        mutationFn: ({ roomId, name }: { roomId: string; name: string }) => roomsService.update(householdId!, roomId, { name }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['rooms', householdId] });
+            setEditRoomModal({ open: false });
+        },
+        onError: (error: any) => {
+            console.error('Erreur lors de la mise à jour de la pièce:', error);
+            const detail = error?.response?.data?.detail || error?.message;
+            alert(detail || 'Erreur lors de la mise à jour de la pièce');
         }
     });
 
@@ -313,7 +329,14 @@ const Home = () => {
                                 {rooms.length > 0 ? (
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                         {rooms.map((room) => (
-                                            <Card key={room.id} className="group hover:shadow-md transition-shadow">
+                                            <Card
+                                                key={room.id}
+                                                className="group hover:shadow-md transition-shadow cursor-pointer"
+                                                onClick={() => {
+                                                    // MVP: navigation ou log
+                                                    console.log('Room card clicked', { roomId: room.id, name: room.name });
+                                                }}
+                                            >
                                                 <CardHeader className="pb-3">
                                                     <div className="flex items-center justify-between">
                                                         <div className="flex items-center gap-3">
@@ -325,7 +348,10 @@ const Home = () => {
                                                                 variant="ghost"
                                                                 size="sm"
                                                                 className="h-8 w-8 p-0"
-                                                                onClick={() => {/* TODO: Implement edit */ }}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setEditRoomModal({ open: true, room });
+                                                                }}
                                                             >
                                                                 <Pencil className="h-4 w-4" />
                                                             </Button>
@@ -343,21 +369,13 @@ const Home = () => {
                                                 <CardContent>
                                                     <div className="space-y-2">
                                                         <div className="flex justify-between text-sm">
-                                                            <span className="text-gray-600">Tâches actives</span>
+                                                            <span className="text-gray-600">Nombre de tâches à faire aujourd'hui</span>
                                                             <Badge variant="secondary">0</Badge>
                                                         </div>
                                                         <div className="flex justify-between text-sm">
                                                             <span className="text-gray-600">Dernière action</span>
                                                             <span className="text-gray-500">Jamais</span>
                                                         </div>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="w-full mt-3"
-                                                            onClick={() => {/* TODO: Navigate to room detail */ }}
-                                                        >
-                                                            Voir les détails
-                                                        </Button>
                                                     </div>
                                                 </CardContent>
                                             </Card>
@@ -481,6 +499,17 @@ const Home = () => {
                 onClose={() => setShowInviteMemberModal(false)}
                 onSubmit={handleInviteMember}
                 isLoading={inviteMemberMutation.isPending}
+            />
+            {/* Modal d'édition de pièce */}
+            <EditRoomModal
+                isOpen={editRoomModal.open}
+                onClose={() => setEditRoomModal({ open: false })}
+                initialName={editRoomModal.room?.name || ''}
+                onSubmit={(name) => {
+                    if (!editRoomModal.room) return;
+                    updateRoomMutation.mutate({ roomId: editRoomModal.room.id, name });
+                }}
+                isLoading={updateRoomMutation.isPending}
             />
             {/* Modal de création de ménage accessible aussi depuis cette page */}
             <CreateHouseholdModal
