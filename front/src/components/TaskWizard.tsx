@@ -204,7 +204,7 @@ export const TaskWizard: React.FC<TaskWizardProps> = ({ mode, householdId, initi
     };
 
     return (
-        <div className="space-y-6">
+        <div className="grid grid-rows-[auto,1fr,auto] gap-6 max-h-full min-h-0">
             {/* Progress */}
             <div className="px-0 py-0">
                 <div className="flex items-center space-x-4">
@@ -229,159 +229,164 @@ export const TaskWizard: React.FC<TaskWizardProps> = ({ mode, householdId, initi
                 </div>
             </div>
 
-            {/* Steps */}
-            {currentStep === 1 && (
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Titre *</Label>
-                        <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Passer l'aspirateur" />
-                        {errors.title && <p className="text-red-600 text-sm">{errors.title}</p>}
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Description</Label>
-                        <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Steps container scrollable */}
+            <div className="min-h-0 overflow-y-auto pr-1">
+                {currentStep === 1 && (
+                    <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label>Pièce *</Label>
-                            <Select value={roomId} onValueChange={setRoomId}>
+                            <Label>Titre *</Label>
+                            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Passer l'aspirateur" />
+                            {errors.title && <p className="text-red-600 text-sm">{errors.title}</p>}
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Description</Label>
+                            <Textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Pièce *</Label>
+                                <Select value={roomId} onValueChange={setRoomId}>
+                                    <SelectTrigger>
+                                        <div className="flex items-center gap-2">
+                                            <Home className="h-4 w-4 text-gray-400" />
+                                            <SelectValue placeholder="Sélectionner une pièce" />
+                                        </div>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {roomsList.map(r => (
+                                            <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {errors.roomId && <p className="text-red-600 text-sm">{errors.roomId}</p>}
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Durée estimée (minutes)</Label>
+                                <div className="relative">
+                                    <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                    <Input type="number" className="pl-10" value={estimated} onChange={e => setEstimated(parseInt(e.target.value) || '')} min={1} />
+                                </div>
+                                {errors.estimated && <p className="text-red-600 text-sm">{errors.estimated}</p>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {currentStep === 2 && (
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Assigner à</Label>
+                            <Select value={assignedTo} onValueChange={setAssignedTo}>
                                 <SelectTrigger>
-                                    <div className="flex items-center gap-2">
-                                        <Home className="h-4 w-4 text-gray-400" />
-                                        <SelectValue placeholder="Sélectionner une pièce" />
-                                    </div>
+                                    <SelectValue placeholder="Sélectionner un membre" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {roomsList.map(r => (
-                                        <SelectItem key={r.id} value={r.id}>{r.name}</SelectItem>
+                                    <SelectItem value="auto">Automatique</SelectItem>
+                                    {membersList.map(m => (
+                                        <SelectItem key={m.id} value={m.id}>{m.user_full_name || m.user_email || 'Membre'}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
-                            {errors.roomId && <p className="text-red-600 text-sm">{errors.roomId}</p>}
                         </div>
-                        <div className="space-y-2">
-                            <Label>Durée estimée (minutes)</Label>
-                            <div className="relative">
-                                <Clock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input type="number" className="pl-10" value={estimated} onChange={e => setEstimated(parseInt(e.target.value) || '')} min={1} />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Date de début</Label>
+                                <div className="relative">
+                                    <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                    <Input type="date" className="pl-10" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                                </div>
                             </div>
-                            {errors.estimated && <p className="text-red-600 text-sm">{errors.estimated}</p>}
+                            <div className="space-y-2">
+                                <Label>Priorité</Label>
+                                <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Sélectionner" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="low">Faible</SelectItem>
+                                        <SelectItem value="medium">Moyenne</SelectItem>
+                                        <SelectItem value="high">Haute</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {currentStep === 2 && (
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Assigner à</Label>
-                        <Select value={assignedTo} onValueChange={setAssignedTo}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Sélectionner un membre" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="auto">Automatique</SelectItem>
-                                {membersList.map(m => (
-                                    <SelectItem key={m.id} value={m.id}>{m.user_full_name || m.user_email || 'Membre'}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {currentStep === 3 && (
+                    <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label>Date de début</Label>
-                            <div className="relative">
-                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input type="date" className="pl-10" value={startDate} onChange={e => setStartDate(e.target.value)} />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Priorité</Label>
-                            <Select value={priority} onValueChange={(v: any) => setPriority(v)}>
+                            <Label>Récurrence</Label>
+                            <Select value={recurrenceType} onValueChange={(v: any) => setRecurrenceType(v)}>
                                 <SelectTrigger>
-                                    <SelectValue placeholder="Sélectionner" />
+                                    <div className="flex items-center gap-2">
+                                        <Repeat className="h-4 w-4 text-gray-400" />
+                                        <SelectValue placeholder="Sélectionner une récurrence" />
+                                    </div>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="low">Faible</SelectItem>
-                                    <SelectItem value="medium">Moyenne</SelectItem>
-                                    <SelectItem value="high">Haute</SelectItem>
+                                    <SelectItem value="once">Ponctuelle</SelectItem>
+                                    <SelectItem value="daily">Quotidienne</SelectItem>
+                                    <SelectItem value="weekly">Hebdomadaire</SelectItem>
+                                    <SelectItem value="monthly">Mensuelle</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
-                    </div>
-                </div>
-            )}
 
-            {currentStep === 3 && (
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <Label>Récurrence</Label>
-                        <Select value={recurrenceType} onValueChange={(v: any) => setRecurrenceType(v)}>
-                            <SelectTrigger>
-                                <div className="flex items-center gap-2">
-                                    <Repeat className="h-4 w-4 text-gray-400" />
-                                    <SelectValue placeholder="Sélectionner une récurrence" />
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="once">Ponctuelle</SelectItem>
-                                <SelectItem value="daily">Quotidienne</SelectItem>
-                                <SelectItem value="weekly">Hebdomadaire</SelectItem>
-                                <SelectItem value="monthly">Mensuelle</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {recurrenceType === 'weekly' && (
-                        <div className="flex flex-wrap gap-2">
-                            {DAYS_OF_WEEK.map(d => (
-                                <Button key={d.value} type="button" variant={recurrenceWeekDays.includes(d.value) ? 'default' : 'outline'} onClick={() => handleWeekDayToggle(d.value)}>
-                                    {d.label}
-                                </Button>
-                            ))}
-                            {errors.recurrence && <p className="text-red-600 text-sm w-full">{errors.recurrence}</p>}
-                        </div>
-                    )}
-
-                    {recurrenceType === 'monthly' && (
-                        <div className="space-y-2">
-                            <div className="grid grid-cols-7 gap-2">
-                                {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                                    <Button
-                                        key={d}
-                                        type="button"
-                                        variant={recurrenceMonthDays.includes(d) ? 'default' : 'outline'}
-                                        onClick={() => handleMonthDayToggle(d)}
-                                    >
-                                        {d}
+                        {recurrenceType === 'weekly' && (
+                            <div className="flex flex-wrap gap-2">
+                                {DAYS_OF_WEEK.map(d => (
+                                    <Button key={d.value} type="button" variant={recurrenceWeekDays.includes(d.value) ? 'default' : 'outline'} onClick={() => handleWeekDayToggle(d.value)}>
+                                        {d.label}
                                     </Button>
                                 ))}
+                                {errors.recurrence && <p className="text-red-600 text-sm w-full">{errors.recurrence}</p>}
                             </div>
-                            {errors.recurrence && <p className="text-red-600 text-sm">{errors.recurrence}</p>}
-                        </div>
-                    )}
+                        )}
 
-                    <Card className="bg-blue-50 border-blue-200">
-                        <CardContent className="p-4">
-                            <h4 className="font-medium text-blue-900 mb-2">Aperçu 30 jours</h4>
-                            <p className="text-sm text-blue-700">
-                                {recurrenceType === 'once'
-                                    ? `Tâche unique le ${startDate}`
-                                    : recurrenceType === 'daily'
-                                        ? `Tous les jours à partir du ${startDate}`
-                                        : recurrenceType === 'weekly'
-                                            ? (recurrenceWeekDays.length ? `Chaque ${recurrenceWeekDays.join(', ')} à partir du ${startDate}` : `Hebdomadaire à partir du ${startDate}`)
-                                            : recurrenceType === 'monthly'
-                                                ? (recurrenceMonthDays.length ? `Chaque mois aux jours ${recurrenceMonthDays.join(', ')} à partir du ${startDate}` : `Mensuelle à partir du ${startDate}`)
-                                                : ''}
-                            </p>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+                        {recurrenceType === 'monthly' && (
+                            <div className="space-y-2">
+                                <div className="grid grid-cols-7 gap-2">
+                                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                                        <Button
+                                            key={d}
+                                            type="button"
+                                            variant={recurrenceMonthDays.includes(d) ? 'default' : 'outline'}
+                                            onClick={() => handleMonthDayToggle(d)}
+                                        >
+                                            {d}
+                                        </Button>
+                                    ))}
+                                </div>
+                                {errors.recurrence && <p className="text-red-600 text-sm">{errors.recurrence}</p>}
+                            </div>
+                        )}
 
-            {/* Footer - sticky at bottom for mobile */}
-            <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-t px-4 py-3 flex items-center justify-between z-10">
+                        <Card className="bg-blue-50 border-blue-200">
+                            <CardContent className="p-4">
+                                <h4 className="font-medium text-blue-900 mb-2">Aperçu 30 jours</h4>
+                                <p className="text-sm text-blue-700">
+                                    {recurrenceType === 'once'
+                                        ? `Tâche unique le ${startDate}`
+                                        : recurrenceType === 'daily'
+                                            ? `Tous les jours à partir du ${startDate}`
+                                            : recurrenceType === 'weekly'
+                                                ? (recurrenceWeekDays.length ? `Chaque ${recurrenceWeekDays.join(', ')} à partir du ${startDate}` : `Hebdomadaire à partir du ${startDate}`)
+                                                : recurrenceType === 'monthly'
+                                                    ? (recurrenceMonthDays.length ? `Chaque mois aux jours ${recurrenceMonthDays.join(', ')} à partir du ${startDate}` : `Mensuelle à partir du ${startDate}`)
+                                                    : ''}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+            </div>
+
+            {/* Footer - fixed row, always visible */}
+            <div
+                className="bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 border-t -mx-4 sm:mx-0 px-4 py-3 flex items-center justify-between z-10"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            >
                 <div className="flex gap-2">
                     {currentStep > (inEdit ? 1 : 0) && (
                         <Button type="button" variant="outline" onClick={() => setCurrentStep(prev => prev - 1)}>Précédent</Button>
