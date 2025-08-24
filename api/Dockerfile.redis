@@ -1,0 +1,11 @@
+# Image Redis dédiée pour l'infrastructure
+# NB: Sur Render on utilisera de préférence un service Valkey/Redis managé.
+# Ce Dockerfile est fourni si vous souhaitez builder votre propre image Redis.
+
+FROM redis:7-alpine
+
+# Exposer le port Redis
+EXPOSE 6379
+
+# Configuration par défaut : AOF activé (persistance simple)
+CMD ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]

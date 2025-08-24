@@ -55,12 +55,12 @@ class Settings(BaseSettings):
     log_max_bytes: int = 10485760
     log_backup_count: int = 5  # Nombre de fichiers de backup à conserver
 
-    # SMTP settings pour les emails
-    smtp_host: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_user: Optional[str] = None
-    smtp_password: Optional[str] = None
-    sender_email: str = "noreply@cleaningtracker.com"
+    # SMTP settings pour les emails 
+    smtp_host: str = "smtp-relay.gmail.com"
+    smtp_port: int = 465
+    smtp_user: Optional[str] = "cleanapp"
+    smtp_password: Optional[str] = os.getenv("SMTP_PASSWORD", None)
+    sender_email: str = "cbdlt.dev@gmail.com"
     sender_name: str = "Cleaning Tracker"
 
     # URL de l'application (pour les liens dans les emails)
@@ -79,6 +79,8 @@ class Settings(BaseSettings):
     "http://127.0.0.1:5173",
     "http://host.docker.internal:5173",
     "http://host.docker.internal:3000",
+    "https://cleaning-app-api.onrender.com",
+    "https://cleaning-tracker-czza.onrender.com",
     ]
 
 

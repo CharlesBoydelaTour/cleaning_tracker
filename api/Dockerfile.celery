@@ -1,0 +1,56 @@
+# Multi-stage build pour l'image Celery
+FROM python:3.13-slim AS builder
+
+# Variables d'environnement pour Python
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Dépendances système minimales
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Installer uv pour la gestion des dépendances
+RUN pip install uv
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+
+# Installer les dépendances dans un venv (prod + dev si requis)
+RUN uv sync --frozen
+
+
+# Stage final: runtime Celery
+FROM python:3.13-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+# Créer un utilisateur non-root
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Répertoires nécessaires
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+
+# Copier le venv depuis le builder
+COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
+
+WORKDIR /app
+
+# Copier le code source
+COPY --chown=appuser:appuser . .
+
+# Utilisateur non-root
+USER appuser
+
+# Variables attendues au runtime (exposées ici pour documentation)
+# - DATABASE_URL, REDIS_URL, SECRET_KEY
+# - SUPABASE_URL, SUPABASE_ANON_KEY, SERVICE_ROLE_KEY (si nécessaires)
+# - ENVIRONMENT, LOG_LEVEL, LOG_FORMAT
+# - CELERY_CONCURRENCY (optionnel)
+
+# Commande par défaut: worker Celery
+CMD ["celery", "-A", "app.core.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
