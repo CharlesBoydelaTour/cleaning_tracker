@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { User, Mail, Lock, Bell, Trash2, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,15 +18,15 @@ import { useCurrentHousehold } from '@/hooks/use-current-household';
 
 const Profile = () => {
   const { toast } = useToast();
-  const { logout } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { householdName, refetch: refetchHousehold } = useCurrentHousehold();
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeHousehold] = useState<string | undefined>(undefined);
   const [profile, setProfile] = useState({
-    name: 'Sarah Smith',
-    email: 'sarah@example.com'
+    name: '',
+    email: ''
   });
 
   const [notifications, setNotifications] = useState({
@@ -38,6 +38,18 @@ const Profile = () => {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [pwd, setPwd] = useState({ current: '', next: '', confirm: '' });
+
+  useEffect(() => {
+    if (user) {
+      setProfile({ name: user.full_name || '', email: user.email || '' });
+    } else {
+      // Fallback: tenter de charger /auth/me
+      authService.getCurrentUser().then(u => {
+        setProfile({ name: u.full_name || '', email: u.email || '' });
+      }).catch(() => {/* ignore */ });
+    }
+  }, [user]);
 
   // Invites: list + actions
   const { data: invites = [], isLoading: invitesLoading, isError: invitesError, refetch: refetchInvites } = useQuery<UserInvite[]>({
@@ -74,24 +86,12 @@ const Profile = () => {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
     try {
-      // TODO: Replace with actual Supabase/FastAPI call
-      console.log('Updating profile:', profile);
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully.",
-      });
-
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update profile.",
-        variant: "destructive",
-      });
+      await authService.updateProfile({ full_name: profile.name, email: profile.email });
+      await refreshUser();
+      toast({ title: 'Profil mis à jour', description: 'Vos informations ont été enregistrées.' });
+    } catch (err: any) {
+      toast({ title: 'Erreur', description: err?.response?.data?.detail || 'Échec de la mise à jour.', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -148,31 +148,31 @@ const Profile = () => {
       <main className="container mx-auto px-4 py-6 pb-20 md:pb-6">
         <div className="max-w-2xl space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Profile & Settings</h1>
-            <p className="text-gray-600">Manage your account and preferences</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Profil & Paramètres</h1>
+            <p className="text-gray-600">Gérez votre compte et vos préférences</p>
           </div>
 
           {/* Pending Invitations */}
           <Card className="shadow-sm border-0 bg-white">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-gray-900">
-                Pending Household Invitations
+                Invitations en attente
               </CardTitle>
             </CardHeader>
             <CardContent>
               {invitesLoading && (
-                <div className="text-gray-600">Loading invites...</div>
+                <div className="text-gray-600">Chargement des invitations…</div>
               )}
               {invitesError && (
                 <div className="flex items-center justify-between gap-4">
-                  <span className="text-red-600">Failed to load invites.</span>
+                  <span className="text-red-600">Échec du chargement des invitations.</span>
                   <Button variant="outline" size="sm" onClick={() => refetchInvites()}>
-                    Retry
+                    Réessayer
                   </Button>
                 </div>
               )}
               {!invitesLoading && !invitesError && invites.length === 0 && (
-                <p className="text-gray-600">No pending invitations.</p>
+                <p className="text-gray-600">Aucune invitation en attente.</p>
               )}
               {!invitesLoading && !invitesError && invites.length > 0 && (
                 <div className="space-y-3">
@@ -180,7 +180,7 @@ const Profile = () => {
                     <div key={inv.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-md">
                       <div>
                         <p className="font-medium text-gray-900">{inv.household_name}</p>
-                        <p className="text-sm text-gray-600">Role: {inv.role}</p>
+                        <p className="text-sm text-gray-600">Rôle : {inv.role}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -189,7 +189,7 @@ const Profile = () => {
                           disabled={acceptInviteMutation.isPending}
                           onClick={() => acceptInviteMutation.mutate(inv.id)}
                         >
-                          Accept
+                          Accepter
                         </Button>
                         <Button
                           size="sm"
@@ -197,7 +197,7 @@ const Profile = () => {
                           disabled={declineInviteMutation.isPending}
                           onClick={() => declineInviteMutation.mutate(inv.id)}
                         >
-                          Decline
+                          Refuser
                         </Button>
                       </div>
                     </div>
@@ -211,14 +211,14 @@ const Profile = () => {
           <Card className="shadow-sm border-0 bg-white">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-gray-900">
-                Personal Information
+                Informations personnelles
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleProfileUpdate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name" className="text-sm font-medium text-gray-700">
-                    Full Name
+                    Nom
                   </Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -234,7 +234,7 @@ const Profile = () => {
 
                 <div className="space-y-2">
                   <Label htmlFor="email" className="text-sm font-medium text-gray-700">
-                    Email Address
+                    Adresse email
                   </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -256,12 +256,12 @@ const Profile = () => {
                   {isLoading ? (
                     <div className="flex items-center gap-2">
                       <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Updating...
+                      Mise à jour…
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <Save className="h-4 w-4" />
-                      Update Profile
+                      Mettre à jour le profil
                     </div>
                   )}
                 </Button>
@@ -273,14 +273,36 @@ const Profile = () => {
           <Card className="shadow-sm border-0 bg-white">
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-gray-900">
-                Change Password
+                Changer de mot de passe
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <form
+                className="space-y-4"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  // Validations simples
+                  if (pwd.next.length < 8) {
+                    toast({ title: 'Erreur', description: 'Le nouveau mot de passe doit contenir au moins 8 caractères.', variant: 'destructive' });
+                    return;
+                  }
+                  if (pwd.next !== pwd.confirm) {
+                    toast({ title: 'Erreur', description: 'Les mots de passe ne correspondent pas.', variant: 'destructive' });
+                    return;
+                  }
+                  try {
+                    await authService.changePassword({ current_password: pwd.current, new_password: pwd.next });
+                    toast({ title: 'Mot de passe modifié', description: 'Votre mot de passe a été mis à jour.' });
+                    setPwd({ current: '', next: '', confirm: '' });
+                  } catch (err: any) {
+                    const detail = err?.response?.data?.detail || "Échec du changement de mot de passe.";
+                    toast({ title: 'Erreur', description: detail, variant: 'destructive' });
+                  }
+                }}
+              >
                 <div className="space-y-2">
                   <Label htmlFor="currentPassword" className="text-sm font-medium text-gray-700">
-                    Current Password
+                    Mot de passe actuel
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -288,13 +310,15 @@ const Profile = () => {
                       id="currentPassword"
                       type="password"
                       className="pl-10"
+                      value={pwd.current}
+                      onChange={(e) => setPwd({ ...pwd, current: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="newPassword" className="text-sm font-medium text-gray-700">
-                    New Password
+                    Nouveau mot de passe
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -302,13 +326,15 @@ const Profile = () => {
                       id="newPassword"
                       type="password"
                       className="pl-10"
+                      value={pwd.next}
+                      onChange={(e) => setPwd({ ...pwd, next: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
-                    Confirm New Password
+                    Confirmer le nouveau mot de passe
                   </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -316,14 +342,16 @@ const Profile = () => {
                       id="confirmPassword"
                       type="password"
                       className="pl-10"
+                      value={pwd.confirm}
+                      onChange={(e) => setPwd({ ...pwd, confirm: e.target.value })}
                     />
                   </div>
                 </div>
 
-                <Button variant="outline" className="border-gray-200 hover:bg-gray-50">
-                  Change Password
+                <Button type="submit" variant="outline" className="border-gray-200 hover:bg-gray-50">
+                  Changer de mot de passe
                 </Button>
-              </div>
+              </form>
             </CardContent>
           </Card>
 
@@ -332,14 +360,14 @@ const Profile = () => {
             <CardHeader>
               <CardTitle className="text-lg font-semibold text-gray-900 flex items-center gap-2">
                 <Bell className="h-5 w-5" />
-                Notification Preferences
+                Préférences de notification
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Push Notifications</p>
-                  <p className="text-sm text-gray-600">Receive notifications on your device</p>
+                  <p className="font-medium text-gray-900">Notifications push</p>
+                  <p className="text-sm text-gray-600">Recevez des notifications sur votre appareil</p>
                 </div>
                 <Switch
                   checked={notifications.pushEnabled}
@@ -351,8 +379,8 @@ const Profile = () => {
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Email Notifications</p>
-                  <p className="text-sm text-gray-600">Receive notifications via email</p>
+                  <p className="font-medium text-gray-900">Notifications email</p>
+                  <p className="text-sm text-gray-600">Recevez des notifications par e‑mail</p>
                 </div>
                 <Switch
                   checked={notifications.emailEnabled}
@@ -364,7 +392,7 @@ const Profile = () => {
 
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">
-                  Reminder Time (minutes before)
+                  Délai de rappel (minutes avant)
                 </Label>
                 <Input
                   type="number"
@@ -379,7 +407,7 @@ const Profile = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-700">
-                    Quiet Hours Start
+                    Début des heures calmes
                   </Label>
                   <Input
                     type="time"
@@ -392,7 +420,7 @@ const Profile = () => {
 
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-gray-700">
-                    Quiet Hours End
+                    Fin des heures calmes
                   </Label>
                   <Input
                     type="time"

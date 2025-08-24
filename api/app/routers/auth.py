@@ -6,6 +6,8 @@ from app.schemas.auth import (
     Token,
     RefreshToken,
     UserResponse,
+    UserUpdate,
+    PasswordChange,
 )
 from fastapi import HTTPException
 from app.core.security import get_current_user
@@ -48,6 +50,25 @@ async def get_current_user_info(
 ):
     """Obtenir les informations de l'utilisateur courant"""
     return await AuthService.get_user_profile(current_user)
+
+
+@router.put("/me", response_model=UserResponse)
+async def update_current_user(
+    data: UserUpdate,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Mettre à jour le nom et/ou l'email de l'utilisateur courant"""
+    return await AuthService.update_user_profile(current_user, data)
+
+
+@router.post("/change-password")
+async def change_password(
+    payload: PasswordChange,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Changer le mot de passe de l'utilisateur courant"""
+    await AuthService.change_password(current_user, payload)
+    return {"message": "Mot de passe modifié avec succès"}
 
 
 @router.post("/reset-password")

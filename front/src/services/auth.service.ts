@@ -23,6 +23,15 @@ export const authService = {
     return response.data;
   },
 
+  async updateProfile(data: { full_name?: string; email?: string }): Promise<User> {
+    const response = await apiClient.put<User>('/auth/me', data);
+    return response.data;
+  },
+
+  async changePassword(data: { current_password: string; new_password: string }): Promise<void> {
+    await apiClient.post('/auth/change-password', data);
+  },
+
   async refreshToken(refreshToken: string): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>('/auth/refresh', {
       refresh_token: refreshToken

@@ -53,3 +53,17 @@ class UserResponse(BaseModel):
 class AuthResponse(BaseModel):
     user: UserResponse
     tokens: Token
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+    model_config = ConfigDict(strict=True)
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+    model_config = ConfigDict(strict=True)
